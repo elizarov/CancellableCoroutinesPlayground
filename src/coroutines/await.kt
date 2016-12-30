@@ -2,18 +2,19 @@ package coroutines
 
 import coroutines.cancellable.CancelHandler
 import coroutines.cancellable.Cancellable
+import coroutines.cancellable.CancellableContinuation
 import coroutines.cancellable.suspendCancellableCoroutine
 import java.util.concurrent.CompletableFuture
 
 suspend fun <T> CompletableFuture<T>.await(): T =
-    suspendCancellableCoroutine { c ->
+    suspendCancellableCoroutine { cont: CancellableContinuation<T> ->
         val g = whenComplete { result, exception ->
             if (exception == null) // the future has been completed normally
-                c.resume(result)
+                cont.resume(result)
             else // the future has completed with an exception
-                c.resumeWithException(exception)
+                cont.resumeWithException(exception)
         }
-        c.registerCancelHandler(object : CancelHandler {
+        cont.registerCancelHandler(object : CancelHandler {
             override fun handleCancel(cancellable: Cancellable) {
                 g.cancel(false)
             }
