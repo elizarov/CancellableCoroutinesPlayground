@@ -1,13 +1,12 @@
 package coroutines.cancellable
 
-import coroutines.context.SuspendedCoroutine
-import coroutines.context.get
+import coroutines.context.CoroutineContinuation
 import coroutines.context.suspendCoroutineOrReturn
 import kotlin.coroutines.CoroutineIntrinsics.SUSPENDED
 
 // --------------- cancellable continuations ---------------
 
-public interface CancellableContinuation<in T> : SuspendedCoroutine<T>, Cancellable {
+public interface CancellableContinuation<in T> : CoroutineContinuation<T>, Cancellable {
     public fun cancel()
 }
 
@@ -22,9 +21,9 @@ public inline suspend fun <T> suspendCancellableCoroutine(crossinline block: (Ca
 
 @PublishedApi
 internal class SafeCancellableContinuation<in T>(
-        private val delegate: SuspendedCoroutine<T>,
+        private val delegate: CoroutineContinuation<T>,
         cancellable: Cancellable?
-) : CancellationScope(), CancellableContinuation<T>, CancelHandler, SuspendedCoroutine<T> by delegate {
+) : CancellationScope(), CancellableContinuation<T>, CancelHandler, CoroutineContinuation<T> by delegate {
     private val registration = cancellable?.registerCancelHandler(this)
 
     private class Fail(val exception: Throwable)

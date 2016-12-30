@@ -42,6 +42,11 @@ class CoroutineContextTest {
         assertEquals(CtxA(1), ctx[CtxA])
         assertEquals(CtxB(4), ctx[CtxB])
         assertEquals(CtxC(3), ctx[CtxC])
+
+        ctx += CtxA(5)
+        assertEquals(CtxA(5), ctx[CtxA])
+        assertEquals(CtxB(4), ctx[CtxB])
+        assertEquals(CtxC(3), ctx[CtxC])
     }
 
     @Test

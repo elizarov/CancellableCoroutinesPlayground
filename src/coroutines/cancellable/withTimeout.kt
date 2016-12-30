@@ -1,6 +1,5 @@
 package coroutines.cancellable
 
-import coroutines.context.plus
 import coroutines.context.startCoroutine
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
