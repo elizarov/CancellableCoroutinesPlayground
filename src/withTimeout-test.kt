@@ -1,3 +1,7 @@
+import coroutines.async
+import coroutines.await
+import coroutines.cancellable.CancellationException
+import coroutines.cancellable.withTimeout
 import java.util.concurrent.CompletableFuture
 
 fun main(args: Array<String>) {

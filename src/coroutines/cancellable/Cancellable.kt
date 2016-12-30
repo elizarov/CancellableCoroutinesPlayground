@@ -1,11 +1,15 @@
-import java.util.concurrent.atomic.AtomicReference
+package coroutines.cancellable
+
+import coroutines.context.CoroutineContext
+import coroutines.context.CoroutineContextType
+import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater
-import kotlin.coroutines.Continuation
-import kotlin.coroutines.ContinuationDispatcher
 
 // --------------- core cancellable interfaces ---------------
 
-public interface Cancellable {
+public interface Cancellable : CoroutineContext {
+    companion object : CoroutineContextType<Cancellable>
+    public override val contextType get() = Companion
     public val isCancelled: Boolean
     public fun registerCancelHandler(handler: CancelHandler): CancelRegistration
 }
@@ -18,7 +22,7 @@ public interface CancelRegistration {
     fun unregisterCancelHandler()
 }
 
-typealias CancellationException = java.util.concurrent.CancellationException
+typealias CancellationException = CancellationException
 
 // --------------- utility classes to simplify cancellable implementation
 
@@ -109,8 +113,8 @@ public open class CancellationScope : Cancellable {
     private class RemovedNode(val ref: HandlerNode?) : ActiveNode()
 
     private class HandlerNode(
-        val scope: CancellationScope,
-        val handler: CancelHandler
+            val scope: CancellationScope,
+            val handler: CancelHandler
     ) : ActiveNode(), CancelRegistration {
         @Volatile
         var next: ActiveNode? = null

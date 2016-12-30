@@ -1,3 +1,8 @@
+package coroutines
+
+import coroutines.cancellable.CancelHandler
+import coroutines.cancellable.Cancellable
+import coroutines.cancellable.suspendCancellableCoroutine
 import java.util.concurrent.CompletableFuture
 
 suspend fun <T> CompletableFuture<T>.await(): T =

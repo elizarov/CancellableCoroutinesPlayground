@@ -1,44 +1,30 @@
-import java.util.concurrent.atomic.AtomicReferenceFieldUpdater
-import kotlin.coroutines.*
+package coroutines.cancellable
+
+import coroutines.context.SuspendedCoroutine
+import coroutines.context.get
+import coroutines.context.suspendCoroutineOrReturn
 import kotlin.coroutines.CoroutineIntrinsics.SUSPENDED
 
 // --------------- cancellable continuations ---------------
 
-public interface CancellableContinuation<in T> : Continuation<T>, Cancellable {
+public interface CancellableContinuation<in T> : SuspendedCoroutine<T>, Cancellable {
     public fun cancel()
 }
 
 public inline suspend fun <T> suspendCancellableCoroutine(crossinline block: (CancellableContinuation<T>) -> Unit): T =
-    suspendDispatchedCoroutineOrReturn { c, d ->
-        val safe = SafeCancellableContinuation(c, d as? Cancellable)
+    suspendCoroutineOrReturn { c ->
+        val safe = SafeCancellableContinuation(c, c.context[Cancellable])
         block(safe)
         safe.getResult()
     }
-
-public inline suspend fun <T> suspendCancellableDispatchedCoroutine(crossinline block: (CancellableContinuation<T>, ContinuationDispatcher?) -> Unit): T =
-    suspendDispatchedCoroutineOrReturn { c, d ->
-        val safe = SafeCancellableContinuation(c, d as? Cancellable)
-        block(safe, d)
-        safe.getResult()
-    }
-
-
-public fun <T> (suspend () -> T).createCancellableCoroutine(
-    completion: Continuation<T>,
-    dispatcher: ContinuationDispatcher? = null
-): CancellableContinuation<Unit> {
-    return SafeCancellableContinuation(
-        createCoroutine(completion = completion, dispatcher = dispatcher),
-        dispatcher as? Cancellable)
-}
 
 // --------------- implementation details ---------------
 
 @PublishedApi
 internal class SafeCancellableContinuation<in T>(
-    private val delegate: Continuation<T>,
-    cancellable: Cancellable?
-) : CancellationScope(), CancellableContinuation<T>, CancelHandler {
+        private val delegate: SuspendedCoroutine<T>,
+        cancellable: Cancellable?
+) : CancellationScope(), CancellableContinuation<T>, CancelHandler, SuspendedCoroutine<T> by delegate {
     private val registration = cancellable?.registerCancelHandler(this)
 
     private class Fail(val exception: Throwable)

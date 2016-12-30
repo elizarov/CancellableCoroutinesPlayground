@@ -1,6 +1,6 @@
-package context
+package coroutines.context
 
-import junit.framework.Assert.assertEquals
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class CoroutineContextTest {
@@ -20,8 +20,8 @@ class CoroutineContextTest {
     }
 
     @Test
-    fun testBasicOps() {
-        var ctx: CoroutineContext? = null
+    fun testGetPlus() {
+        var ctx: CoroutineContext = EmptyCoroutineContext
 
         ctx += CtxA(1)
         assertEquals(CtxA(1), ctx[CtxA])
@@ -42,20 +42,25 @@ class CoroutineContextTest {
         assertEquals(CtxA(1), ctx[CtxA])
         assertEquals(CtxB(4), ctx[CtxB])
         assertEquals(CtxC(3), ctx[CtxC])
+    }
+
+    @Test
+    fun testRemove() {
+        var ctx: CoroutineContext = CtxA(1) + CtxB(2) + CtxC(3)
 
         ctx = ctx.remove(CtxA)
         assertEquals(null, ctx[CtxA])
-        assertEquals(CtxB(4), ctx[CtxB])
+        assertEquals(CtxB(2), ctx[CtxB])
         assertEquals(CtxC(3), ctx[CtxC])
 
         ctx = ctx.remove(CtxC)
         assertEquals(null, ctx[CtxA])
-        assertEquals(CtxB(4), ctx[CtxB])
+        assertEquals(CtxB(2), ctx[CtxB])
         assertEquals(null, ctx[CtxC])
 
         ctx = ctx.remove(CtxC)
         assertEquals(null, ctx[CtxA])
-        assertEquals(CtxB(4), ctx[CtxB])
+        assertEquals(CtxB(2), ctx[CtxB])
         assertEquals(null, ctx[CtxC])
 
         ctx = ctx.remove(CtxB)
@@ -63,7 +68,7 @@ class CoroutineContextTest {
         assertEquals(null, ctx[CtxB])
         assertEquals(null, ctx[CtxC])
 
-        assertEquals(null, ctx)
+        assertEquals(EmptyCoroutineContext, ctx)
     }
 
     @Test

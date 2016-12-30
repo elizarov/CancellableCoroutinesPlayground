@@ -1,13 +1,15 @@
+package coroutines.cancellable
+
+import coroutines.context.plus
+import coroutines.context.startCoroutine
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.Continuation
-import kotlin.coroutines.ContinuationDispatcher
-import kotlin.coroutines.startCoroutine
 
 private val timeoutService = Executors.newScheduledThreadPool(1) { r -> Thread(r, "TimeoutService") }
 
 suspend fun <T> withTimeout(millis: Long, block: suspend () -> T): T =
-    suspendCancellableDispatchedCoroutine { c: CancellableContinuation<T>, d: ContinuationDispatcher? ->
+    suspendCancellableCoroutine { c: CancellableContinuation<T> ->
         // schedule cancellation of this continuation on time
         val timeout = timeoutService.schedule({ c.cancel() }, millis, TimeUnit.MILLISECONDS)
         // restart block in a separate coroutine
@@ -22,5 +24,5 @@ suspend fun <T> withTimeout(millis: Long, block: suspend () -> T): T =
                 timeout.cancel(false)
                 c.resumeWithException(exception)
             }
-        }, dispatcher = CancellableDispatcher(c, d)) // use cancellable dispatcher inside
+        }, context = c.context + c) // inner scope is concallable as this continuation
     }
