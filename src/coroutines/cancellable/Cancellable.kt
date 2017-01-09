@@ -1,22 +1,20 @@
 package coroutines.cancellable
 
-import coroutines.context.CoroutineContext
-import coroutines.context.CoroutineContextType
+import coroutines.context.CoroutineContextElement
+import coroutines.context.CoroutineContextKey
 import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater
 
 // --------------- core cancellable interfaces ---------------
 
-public interface Cancellable : CoroutineContext {
-    companion object : CoroutineContextType<Cancellable>
-    public override val contextType get() = Companion
+public interface Cancellable : CoroutineContextElement {
+    companion object : CoroutineContextKey<Cancellable>
+    public override val contextKey get() = Cancellable
     public val isCancelled: Boolean
     public fun registerCancelHandler(handler: CancelHandler): CancelRegistration
 }
 
-public interface CancelHandler {
-    fun handleCancel(cancellable: Cancellable)
-}
+typealias CancelHandler = (Cancellable) -> Unit
 
 public interface CancelRegistration {
     fun unregisterCancelHandler()
@@ -37,7 +35,7 @@ public open class CancellationScope : Cancellable {
 
     protected companion object {
         @JvmStatic
-        private val STATE: AtomicReferenceFieldUpdater<CancellationScope, Any?> =
+        val STATE: AtomicReferenceFieldUpdater<CancellationScope, Any?> =
             AtomicReferenceFieldUpdater.newUpdater(CancellationScope::class.java, Any::class.java, "state")
 
         @JvmStatic
@@ -45,10 +43,6 @@ public open class CancellationScope : Cancellable {
 
         @JvmStatic
         val CANCELLED: Any = Any() // CANCELLED is NOT ActiveNode
-    }
-
-    protected fun compareAndSetState(expect: Any?, update: Any?): Boolean {
-        return STATE.compareAndSet(this, expect, update)
     }
 
     protected open fun unwrapState(state: Any?): Any? = state
@@ -63,13 +57,13 @@ public open class CancellationScope : Cancellable {
         while (true) { // lock-free loop on state
             val cur = state
             if (cur == CANCELLED) {
-                handler.handleCancel(this)
+                handler(this)
                 return NoCancelRegistration
             }
             val u = unwrapState(cur) as? ActiveNode ?: return NoCancelRegistration  // not active anymore
             if (node == null) node = HandlerNode(this, handler)
             node.lazySetNext(u)
-            if (compareAndSetState(cur, rewrapState(cur, node))) return node
+            if (STATE.compareAndSet(this, cur, rewrapState(cur, node))) return node
         }
     }
 
@@ -77,7 +71,7 @@ public open class CancellationScope : Cancellable {
         while (true) { // lock-free loop on state
             val cur = state
             val u = unwrapState(cur) as? ActiveNode ?: return // not active anymore
-            if (compareAndSetState(cur, CANCELLED)) {
+            if (STATE.compareAndSet(this, cur, CANCELLED)) {
                 onCancel(cur, u as? HandlerNode)
                 return
             }
@@ -93,7 +87,7 @@ public open class CancellationScope : Cancellable {
                 cur = next.ref
             } else {
                 try {
-                    cur.handler.handleCancel(this)
+                    cur.handler(this)
                 } catch (ex: Throwable) {
                     if (suppressedException != null) ex.addSuppressed(suppressedException)
                     suppressedException = ex

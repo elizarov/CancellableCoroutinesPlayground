@@ -3,6 +3,11 @@ package coroutines.context
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater
 import kotlin.coroutines.*
 
+/*
+ * Alternative coroutines library with [createCoroutine] and [startCoroutine] that accept [CoroutineContext]
+ * parameter and [suspendCoroutine] the provides [CoroutineContinuation] with context.
+ */
+
 public fun <T> (suspend  () -> T).createCoroutine(
         completion: Continuation<T>,
         context: CoroutineContext = EmptyCoroutineContext
@@ -19,23 +24,32 @@ public fun <T> (suspend  () -> T).startCoroutine(
 
 public interface CoroutineContinuation<in T> : Continuation<T> {
     public val context: CoroutineContext
-    public fun addToContext(other: CoroutineContext)
 }
 
 public suspend fun <T> suspendCoroutine(block: (CoroutineContinuation<T>) -> Unit) =
         suspendDispatchedCoroutineOrReturn<T> { c, d ->
-            val safe = SafeContinuation<T>(c, d as? ContextDispatcherImpl)
+            val safe = SafeContinuation<T>(c, getCoroutineContext(d))
             block(safe)
             safe.getResult()
         }
 
 public suspend fun <T> suspendCoroutineOrReturn(block: (CoroutineContinuation<T>) -> Any?) =
         suspendDispatchedCoroutineOrReturn<T> { c, d ->
-            val impl = object : CoroutineContinuationImpl<T>(d as? ContextDispatcherImpl), Continuation<T> by c {}
+            val impl = object : CoroutineContinuationImpl<T>(getCoroutineContext(d)), Continuation<T> by c {}
             block(impl)
         }
 
 // --------------------- impl ---------------------
+
+private inline suspend fun <T> suspendDispatchedCoroutineOrReturn(crossinline block: (Continuation<T>, ContinuationDispatcher?) -> Any?): T =
+        CoroutineIntrinsics.suspendCoroutineOrReturn { c: Continuation<T> ->
+            @Suppress("INVISIBLE_MEMBER", "INVISIBLE_REFERENCE", "NON_PUBLIC_CALL_FROM_PUBLIC_INLINE")
+            val d = (c as? kotlin.jvm.internal.DispatchedContinuation<T>)?.dispatcher
+            block(c, d)
+        }
+
+private fun getCoroutineContext(d: ContinuationDispatcher?) =
+        (d as? ContextDispatcherImpl)?.context ?: EmptyCoroutineContext
 
 private class ContextDispatcherImpl(var context: CoroutineContext) : ContinuationDispatcher {
     override fun <T> dispatchResume(value: T, continuation: Continuation<T>): Boolean {
@@ -48,15 +62,8 @@ private class ContextDispatcherImpl(var context: CoroutineContext) : Continuatio
 }
 
 private abstract class CoroutineContinuationImpl<in T>(
-    val dispatcher: ContextDispatcherImpl?
-) : CoroutineContinuation<T> {
     override val context: CoroutineContext
-        get() = dispatcher?.context ?: EmptyCoroutineContext
-
-    override fun addToContext(other: CoroutineContext) {
-        dispatcher!!.context += other
-    }
-}
+) : CoroutineContinuation<T>
 
 private val UNDECIDED: Any? = Any()
 private val RESUMED: Any? = Any()
@@ -64,8 +71,8 @@ private class Fail(val exception: Throwable)
 
 private class SafeContinuation<in T>(
     val delegate: Continuation<T>,
-    dispatcher: ContextDispatcherImpl?
-) : CoroutineContinuationImpl<T>(dispatcher) {
+    context: CoroutineContext
+) : CoroutineContinuationImpl<T>(context) {
     @Volatile
     private var result: Any? = UNDECIDED
 

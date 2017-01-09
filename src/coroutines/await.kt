@@ -14,9 +14,5 @@ suspend fun <T> CompletableFuture<T>.await(): T =
             else // the future has completed with an exception
                 cont.resumeWithException(exception)
         }
-        cont.registerCancelHandler(object : CancelHandler {
-            override fun handleCancel(cancellable: Cancellable) {
-                g.cancel(false)
-            }
-        })
+        cont.registerCancelHandler { g.cancel(false) }
     }

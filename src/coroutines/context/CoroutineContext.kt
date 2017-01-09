@@ -2,80 +2,163 @@ package coroutines.context
 
 //--------------------- api ---------------------
 
+/**
+ * Persistent context for the coroutine. It is an indexed set of [CoroutineContextElement] instances.
+ * An indexed set is a mix between a set and a map.
+ * Every element in this set has a unique [CoroutineContextKey].
+ * The context preserves order of its elements, but its equality is set-based.
+ */
 public interface CoroutineContext {
-    public val contextType: CoroutineContextType<*>
+    /**
+     * Returns an element with the given [contextKey] in this context or `null`.
+     */
+    public operator fun <CT : CoroutineContextElement> get(contextKey: CoroutineContextKey<CT>): CT?
 
-    @Suppress("UNCHECKED_CAST")
-    public operator fun <CT : CoroutineContext> get(contextType: CoroutineContextType<CT>): CT? =
-        if (this.contextType == contextType) this as CT else null
+    /**
+     * Returns `true` when this context contains the particular element.
+     */
+    public operator fun contains(element: CoroutineContextElement): Boolean
 
-    public fun <R> fold(initial: R, operation: (R, CoroutineContext) -> R): R =
-        operation(initial, this)
+    /**
+     * Accumulates entries of this context starting with [initial] value and applying [operation]
+     * from left to right to current accumulator value and each element of this context.
+     */
+    public fun <R> fold(initial: R, operation: (R, CoroutineContextElement) -> R): R
 
-    public operator fun plus(other: CoroutineContext): CoroutineContext =
-        other.fold(this) { a, b ->
-            val removed = a.remove(b.contextType)
-            if (removed == EmptyCoroutineContext) b else CombinedContext(b, removed)
-        }
+    /**
+     * Returns a context containing elements from this context and elements from [other] context.
+     * The elements from this context with the same key as in the other one are dropped.
+     */
+    public operator fun plus(other: CoroutineContext): CoroutineContext
 
-    public fun remove(contextType: CoroutineContextType<*>): CoroutineContext =
-        if (this.contextType == contextType) EmptyCoroutineContext else this
+    /**
+     * Returns a context contention elements from this context, but without an element with
+     * the specified [contextKey].
+     */
+    public fun remove(contextKey: CoroutineContextKey<*>): CoroutineContext
 }
 
-public interface CoroutineContextType<CT : CoroutineContext>
+/**
+ * An element of the [CoroutineContext]. An element of the coroutine context is a singleton context by itself.
+ */
+public interface CoroutineContextElement : CoroutineContext {
+    /**
+     * A key of this coroutine context element.
+     */
+    public val contextKey: CoroutineContextKey<*>
 
-public object EmptyCoroutineContext : CoroutineContext, CoroutineContextType<EmptyCoroutineContext> {
-    public override val contextType = EmptyCoroutineContext
+    @Suppress("UNCHECKED_CAST")
+    public override operator fun <CT : CoroutineContextElement> get(contextKey: CoroutineContextKey<CT>): CT? =
+        if (this.contextKey == contextKey) this as CT else null
 
-    override fun <CT : CoroutineContext> get(contextType: CoroutineContextType<CT>): CT? = null
-    override fun <R> fold(initial: R, operation: (R, CoroutineContext) -> R): R = initial
-    override fun plus(other: CoroutineContext): CoroutineContext = other
-    override fun remove(contextType: CoroutineContextType<*>): CoroutineContext = this
+    public override operator fun contains(element: CoroutineContextElement): Boolean =
+        this == element
+
+    public override fun <R> fold(initial: R, operation: (R, CoroutineContextElement) -> R): R =
+        operation(initial, this)
+
+    public override operator fun plus(other: CoroutineContext): CoroutineContext =
+        plusImpl(other)
+
+    public override fun remove(contextKey: CoroutineContextKey<*>): CoroutineContext =
+        if (this.contextKey == contextKey) EmptyCoroutineContext else this
+}
+
+/**
+ * Key for the entries of [CoroutineContext]. [CT] is a type of entry with this key.
+ */
+public interface CoroutineContextKey<CT : CoroutineContextElement>
+
+/**
+ * An empty coroutine context.
+ */
+public object EmptyCoroutineContext : CoroutineContext {
+    public override fun <CT : CoroutineContextElement> get(contextKey: CoroutineContextKey<CT>): CT? = null
+    public override operator fun contains(element: CoroutineContextElement): Boolean = false
+    public override fun <R> fold(initial: R, operation: (R, CoroutineContextElement) -> R): R = initial
+    public override fun plus(other: CoroutineContext): CoroutineContext = other
+    public override fun remove(contextKey: CoroutineContextKey<*>): CoroutineContext = this
+    public override fun hashCode(): Int = 0
+    public override fun toString(): String = "EmptyCoroutineContext"
 }
 
 //--------------------- private impl ---------------------
 
 // this class is not exposed, but is hidden inside implementations
-private class CombinedContext(val cc: CoroutineContext, val next: CoroutineContext) : CoroutineContext {
-    companion object : CoroutineContextType<CombinedContext>
-    override val contextType get() = CombinedContext
-
-    override fun <CT : CoroutineContext> get(contextType: CoroutineContextType<CT>): CT? {
+// this is a left-biased list, so that `plus` works naturally
+private class CombinedContext(val left: CoroutineContext, val element: CoroutineContextElement) : CoroutineContext {
+    override fun <CT : CoroutineContextElement> get(contextKey: CoroutineContextKey<CT>): CT? {
         var cur = this
         while (true) {
-            cur.cc[contextType]?.let { return it }
-            val next = cur.next
+            cur.element[contextKey]?.let { return it }
+            val next = cur.left
             if (next is CombinedContext) {
                 cur = next
             } else {
-                return next[contextType]
+                return next[contextKey]
             }
         }
     }
 
-    override fun <R> fold(initial: R, operation: (R, CoroutineContext) -> R): R {
-        var result = initial
+    public override operator fun contains(element: CoroutineContextElement): Boolean {
         var cur = this
         while (true) {
-            result = operation(result, cur.cc)
-            val next = cur.next
+            if (cur.element == element) return true
+            val next = cur.left
             if (next is CombinedContext) {
                 cur = next
             } else {
-                result = operation(result, cur.next)
-                break
+                return next == element
             }
         }
-        return result
     }
 
-    override fun remove(contextType: CoroutineContextType<*>): CoroutineContext {
-        cc[contextType]?.let { return next }
-        val newNext = next.remove(contextType)
-        return when (newNext) {
-            next -> this
-            EmptyCoroutineContext -> cc
-            else -> CombinedContext(cc, newNext)
+    override fun <R> fold(initial: R, operation: (R, CoroutineContextElement) -> R): R =
+        operation(left.fold(initial, operation), element)
+
+    public override operator fun plus(other: CoroutineContext): CoroutineContext =
+        plusImpl(other)
+
+    override fun remove(contextKey: CoroutineContextKey<*>): CoroutineContext {
+        element[contextKey]?.let { return left }
+        val newLeft = left.remove(contextKey)
+        return when (newLeft) {
+            left -> this
+            EmptyCoroutineContext -> element
+            else -> CombinedContext(newLeft, element)
         }
     }
+
+    private fun size(): Int =
+        if (left is CombinedContext) left.size() + 1 else 2
+
+    private fun containsAll(other: CombinedContext): Boolean {
+        var cur = other
+        while (true) {
+            if (!contains(cur.element)) return false
+            val next = cur.left
+            if (next is CombinedContext) {
+                cur = next
+            } else {
+                return contains(next as CoroutineContextElement)
+            }
+        }
+    }
+
+    override fun equals(other: Any?): Boolean =
+        this === other || other is CombinedContext && other.size() == size() && other.containsAll(this)
+
+    override fun hashCode(): Int = left.hashCode() + element.hashCode()
+
+    override fun toString(): String =
+        "[" + fold("") { acc, element ->
+            if (acc.isEmpty()) element.toString() else acc + ", " + element
+        } + "]"
 }
+
+private fun CoroutineContext.plusImpl(other: CoroutineContext): CoroutineContext =
+    other.fold(this) { acc, element ->
+        val removed = acc.remove(element.contextKey)
+        if (removed == EmptyCoroutineContext) element else CombinedContext(removed, element)
+    }
+

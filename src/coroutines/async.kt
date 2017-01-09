@@ -15,6 +15,7 @@ private class AsyncCompletableFuture<T> : CompletableFuture<T>(), Continuation<T
     override fun resume(value: T) {
         complete(value)
     }
+
     override fun resumeWithException(exception: Throwable) {
         completeExceptionally(exception)
     }

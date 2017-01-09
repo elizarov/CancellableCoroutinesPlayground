@@ -49,11 +49,11 @@ internal class SafeCancellableContinuation<in T>(
         while (true) { // lock-free loop on state
             val cur = state // atomic read
             when (cur) {
-                is ActiveNode -> if (compareAndSetState(cur, value)) {
+                is ActiveNode -> if (STATE.compareAndSet(this, cur, value)) {
                     complete()
                     return
                 }
-                is Suspended -> if (compareAndSetState(cur, RESUMED)) {
+                is Suspended -> if (STATE.compareAndSet(this, cur, RESUMED)) {
                     complete()
                     delegate.resume(value)
                     return
@@ -68,11 +68,11 @@ internal class SafeCancellableContinuation<in T>(
         while (true) { // lock-free loop on state
             val cur = state // atomic read
             when (cur) {
-                is ActiveNode -> if (compareAndSetState(cur, Fail(exception))) {
+                is ActiveNode -> if (STATE.compareAndSet(this, cur, Fail(exception))) {
                     complete()
                     return
                 }
-                is Suspended -> if (compareAndSetState(cur, RESUMED)) {
+                is Suspended -> if (STATE.compareAndSet(this, cur, RESUMED)) {
                     complete()
                     delegate.resumeWithException(exception)
                     return
@@ -91,7 +91,7 @@ internal class SafeCancellableContinuation<in T>(
         while (true) { // lock-free loop on state
             val cur = state // atomic read
             when (cur) {
-                is ActiveNode -> if (compareAndSetState(cur, makeSuspended(cur))) return SUSPENDED
+                is ActiveNode -> if (STATE.compareAndSet(this, cur, makeSuspended(cur))) return SUSPENDED
                 CANCELLED -> throw CancellationException()
                 RESUMED -> return SUSPENDED // already called continuation, indicate SUSPENDED upstream
                 is Fail -> throw cur.exception
@@ -102,7 +102,7 @@ internal class SafeCancellableContinuation<in T>(
 
     // cancellation support
 
-    override fun handleCancel(cancellable: Cancellable) {
+    override fun invoke(cancellable: Cancellable) {
         cancel()
     }
 
@@ -116,5 +116,3 @@ internal class SafeCancellableContinuation<in T>(
         if (suppressedException != null) throw suppressedException
     }
 }
-
-
