@@ -1,4 +1,4 @@
-package coroutines
+package coroutines.futures
 
 import coroutines.context.CoroutineContext
 import coroutines.context.EmptyCoroutineContext

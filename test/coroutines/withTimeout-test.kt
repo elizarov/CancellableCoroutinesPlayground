@@ -1,5 +1,7 @@
-import coroutines.async
-import coroutines.await
+package coroutines
+
+import coroutines.futures.async
+import coroutines.futures.await
 import coroutines.cancellable.CancellationException
 import coroutines.cancellable.withTimeout
 import java.util.concurrent.CompletableFuture

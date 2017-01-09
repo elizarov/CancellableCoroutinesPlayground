@@ -1,5 +1,7 @@
-import coroutines.async
-import coroutines.await
+package coroutines
+
+import coroutines.futures.async
+import coroutines.futures.await
 import coroutines.cancellable.CancellationScope
 import java.util.concurrent.CompletableFuture
 
@@ -10,7 +12,7 @@ fun main(args: Array<String>) {
     }
 
     val scope = CancellationScope()
-    log("Starting coroutines.async f && g")
+    log("Starting coroutines.futures.async f && g")
     val f = async(scope) {
         supplySlow("F").await()
         log("f should not execute this line")
@@ -23,7 +25,7 @@ fun main(args: Array<String>) {
         }
         log("g should not execute this line")
     }
-    log("Started coroutines.async f && g... will not wait -- cancel them!!!")
+    log("Started coroutines.futures.async f && g... will not wait -- cancel them!!!")
     scope.cancel()
     check(f.isCancelled)
     check(g.isCancelled)

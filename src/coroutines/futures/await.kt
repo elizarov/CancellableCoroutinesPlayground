@@ -1,7 +1,5 @@
-package coroutines
+package coroutines.futures
 
-import coroutines.cancellable.CancelHandler
-import coroutines.cancellable.Cancellable
 import coroutines.cancellable.CancellableContinuation
 import coroutines.cancellable.suspendCancellableCoroutine
 import java.util.concurrent.CompletableFuture

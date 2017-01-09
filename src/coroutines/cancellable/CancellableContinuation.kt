@@ -23,9 +23,7 @@ public inline suspend fun <T> suspendCancellableCoroutine(crossinline block: (Ca
 internal class SafeCancellableContinuation<in T>(
         private val delegate: CoroutineContinuation<T>,
         cancellable: Cancellable?
-) : CancellationScope(), CancellableContinuation<T>, CancelHandler, CoroutineContinuation<T> by delegate {
-    private val registration = cancellable?.registerCancelHandler(this)
-
+) : CancellationScope(cancellable), CancellableContinuation<T>, CoroutineContinuation<T> by delegate {
     private class Fail(val exception: Throwable)
     private class Suspended(val state: Any?)
 
@@ -47,14 +45,10 @@ internal class SafeCancellableContinuation<in T>(
 
     override fun resume(value: T) {
         while (true) { // lock-free loop on state
-            val cur = state // atomic read
+            val cur = getState() // atomic read
             when (cur) {
-                is ActiveNode -> if (STATE.compareAndSet(this, cur, value)) {
-                    complete()
-                    return
-                }
-                is Suspended -> if (STATE.compareAndSet(this, cur, RESUMED)) {
-                    complete()
+                is ActiveNode -> if (compareAndSetState(cur, value)) return
+                is Suspended -> if (compareAndSetState(cur, RESUMED)) {
                     delegate.resume(value)
                     return
                 }
@@ -66,14 +60,10 @@ internal class SafeCancellableContinuation<in T>(
 
     override fun resumeWithException(exception: Throwable) {
         while (true) { // lock-free loop on state
-            val cur = state // atomic read
+            val cur = getState() // atomic read
             when (cur) {
-                is ActiveNode -> if (STATE.compareAndSet(this, cur, Fail(exception))) {
-                    complete()
-                    return
-                }
-                is Suspended -> if (STATE.compareAndSet(this, cur, RESUMED)) {
-                    complete()
+                is ActiveNode -> if (compareAndSetState(cur, Fail(exception))) return
+                is Suspended -> if (compareAndSetState(cur, RESUMED)) {
                     delegate.resumeWithException(exception)
                     return
                 }
@@ -83,15 +73,11 @@ internal class SafeCancellableContinuation<in T>(
         }
     }
 
-    private fun complete() {
-        registration?.unregisterCancelHandler()
-    }
-
     fun getResult(): Any? {
         while (true) { // lock-free loop on state
-            val cur = state // atomic read
+            val cur = getState() // atomic read
             when (cur) {
-                is ActiveNode -> if (STATE.compareAndSet(this, cur, makeSuspended(cur))) return SUSPENDED
+                is ActiveNode -> if (compareAndSetState(cur, makeSuspended(cur))) return SUSPENDED
                 CANCELLED -> throw CancellationException()
                 RESUMED -> return SUSPENDED // already called continuation, indicate SUSPENDED upstream
                 is Fail -> throw cur.exception
@@ -100,15 +86,8 @@ internal class SafeCancellableContinuation<in T>(
         }
     }
 
-    // cancellation support
-
-    override fun invoke(cancellable: Cancellable) {
-        cancel()
-    }
-
-    override fun afterCancel(prevState: Any?, suppressedException: Throwable?) {
-        complete()
-        if (prevState is Suspended) {
+    override fun afterCancel(state: Any?, suppressedException: Throwable?) {
+        if (state is Suspended) {
             val cancellationException = CancellationException()
             if (suppressedException != null) cancellationException.addSuppressed(suppressedException)
             delegate.resumeWithException(cancellationException)
