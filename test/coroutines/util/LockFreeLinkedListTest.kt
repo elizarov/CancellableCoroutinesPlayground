@@ -1,13 +1,14 @@
 package coroutines.util
 
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LockFreeLinkedListTest {
     data class IntNode(val i: Int) : LockFreeLinkedListNode()
 
     @Test
-    fun testSimpleSequential() {
+    fun testSimpleAddFirst() {
         val list = LockFreeLinkedListHead()
         assertContents(list)
         val n1 = list.addFirst(IntNode(1))
@@ -28,7 +29,44 @@ class LockFreeLinkedListTest {
         assertContents(list)
     }
 
+    @Test
+    fun testSimpleAddLast() {
+        val list = LockFreeLinkedListHead()
+        assertContents(list)
+        val n1 = list.addLast(IntNode(1))
+        assertContents(list, 1)
+        val n2 = list.addLast(IntNode(2))
+        assertContents(list, 1, 2)
+        val n3 = list.addLast(IntNode(3))
+        assertContents(list, 1, 2, 3)
+        val n4 = list.addLast(IntNode(4))
+        assertContents(list, 1, 2, 3, 4)
+        n1.remove()
+        assertContents(list, 2, 3, 4)
+        n3.remove()
+        assertContents(list, 2, 4)
+        n4.remove()
+        assertContents(list, 2)
+        n2.remove()
+        assertContents(list)
+    }
+
+    @Test
+    fun testCondOps() {
+        val list = LockFreeLinkedListHead()
+        assertContents(list)
+        assertTrue(list.addLastIf(IntNode(1)) { true } != null)
+        assertContents(list, 1)
+        assertTrue(list.addLastIf(IntNode(2)) { false } == null)
+        assertContents(list, 1)
+        assertTrue(list.addFirstIf(IntNode(3)) { true } != null)
+        assertContents(list, 3, 1)
+        assertTrue(list.addFirstIf(IntNode(4)) { false } == null)
+        assertContents(list, 3, 1)
+    }
+
     private fun assertContents(list: LockFreeLinkedListHead, vararg expected: Int) {
+        list.validate()
         val n = expected.size
         val actual = IntArray(n)
         var index = 0

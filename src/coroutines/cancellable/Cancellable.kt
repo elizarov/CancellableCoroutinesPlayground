@@ -72,7 +72,10 @@ public open class CancellationScope(outer: Cancellable? = null) : Cancellable {
     @Volatile
     private var state: Any? = ACTIVE
 
-    private val registration: CancelRegistration? = outer?.registerCancelHandler { cancel() }
+    // directly pass HandlerNode to outer scope to optimize one closure object (see makeNode)
+    private val registration: CancelRegistration? = outer?.registerCancelHandler(object : HandlerNode() {
+        override fun invoke(scope: Cancellable) = cancel()
+    })
 
     protected companion object {
         @JvmStatic
@@ -105,6 +108,7 @@ public open class CancellationScope(outer: Cancellable? = null) : Cancellable {
     public override val isCancelled: Boolean get() = state == CANCELLED
 
     public override fun registerCancelHandler(handler: CancelHandler): CancelRegistration {
+        var nodeCache: HandlerNode? = null
         while (true) { // lock-free loop on state
             val state = this.state
             if (state == CANCELLED) {
@@ -113,15 +117,16 @@ public open class CancellationScope(outer: Cancellable? = null) : Cancellable {
             }
             val u = unwrapState(state) as? ActiveNode ?: return NoCancelRegistration  // not active anymore
             var list = u as? HandlerList
+            val node = nodeCache ?: makeNode(handler).apply { nodeCache = this }
             if (list == null) {
                 list = HandlerList()
-                if (!STATE.compareAndSet(this, state, list)) continue
+                list.addFirst(node)
+                if (STATE.compareAndSet(this, state, list)) return node
+            } else {
+                if(list.addLastIf(node) { this.state == state } != null) return node
             }
-            // todo: synchronize updates with cancel()
-            return list.addFirst(HandlerNode(handler))
         }
     }
-
     public open fun cancel() {
         while (true) { // lock-free loop on state
             val state = this.state
@@ -138,7 +143,7 @@ public open class CancellationScope(outer: Cancellable? = null) : Cancellable {
         var suppressedException: Throwable? = null
         listeners?.forEach<HandlerNode> { node ->
             try {
-                node.handler(this)
+                node.invoke(this)
             } catch (ex: Throwable) {
                 if (suppressedException != null) ex.addSuppressed(suppressedException)
                 suppressedException = ex
@@ -151,12 +156,18 @@ public open class CancellationScope(outer: Cancellable? = null) : Cancellable {
         if (suppressedException != null) throw suppressedException
     }
 
+    private fun makeNode(handler: CancelHandler): HandlerNode = handler as? HandlerNode ?:
+        object : HandlerNode() {
+            override fun invoke(scope: Cancellable) = handler.invoke(scope)
+        }
+
     protected interface ActiveNode
 
     private class HandlerList : LockFreeLinkedListHead(), ActiveNode
 
-    private class HandlerNode(val handler: CancelHandler) : LockFreeLinkedListNode(), CancelRegistration {
+    private abstract class HandlerNode : LockFreeLinkedListNode(), CancelRegistration, CancelHandler {
         override fun unregisterCancelHandler() = remove()
+        override abstract fun invoke(scope: Cancellable)
     }
 
     protected object NoCancelRegistration : CancelRegistration {
