@@ -1,8 +1,10 @@
 package coroutines
 
+import coroutines.`try`.Try
 import coroutines.cancellable.CancellationScope
 import coroutines.futures.asyncFuture
 import coroutines.futures.await
+import java.util.concurrent.CancellationException
 import java.util.concurrent.CompletableFuture
 
 fun main(args: Array<String>) {
@@ -28,9 +30,11 @@ fun main(args: Array<String>) {
         log("g should not execute this line")
     }
     log("Started coroutines.futures.async f && g... will not wait -- cancel them!!!")
-    scope.cancel()
+    scope.cancel(CancellationException("I don't want it"))
     check(f.isCancelled)
     check(g.isCancelled)
+    println("f result = ${Try<Unit> { f.get() }}")
+    println("g result = ${Try<Unit> { g.get() }}")
     Thread.sleep(1000L)
     log("Nothing executed!")
 }
