@@ -1,5 +1,6 @@
 package coroutines.util
 
+import java.util.concurrent.atomic.AtomicIntegerFieldUpdater
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater
 
 private typealias Node = LockFreeLinkedListNode
@@ -37,17 +38,38 @@ public open class LockFreeLinkedListNode {
     internal abstract class CondAdd {
         internal lateinit var newNode: Node
         internal lateinit var oldNext: Node
+        @Volatile
+        private var consensus: Int = UNDECIDED // status of operation
         abstract fun isCondition(): Boolean
 
+        private companion object {
+            @JvmStatic
+            val CONSENSUS: AtomicIntegerFieldUpdater<CondAdd> =
+                AtomicIntegerFieldUpdater.newUpdater(CondAdd::class.java, "consensus")
+
+            const val UNDECIDED = 0
+            const val SUCCESS = 1
+            const val FAILURE = 2
+        }
+
         fun completeAdd(node: Node): Boolean {
-            val ok = isCondition()
-            val update = if (ok) newNode else oldNext
-            if (NEXT.compareAndSet(node, this, update) && ok) {
-                newNode.finishAdd(oldNext)
-                return true
+            // make decision on status
+            var consensus: Int
+            while (true) {
+                consensus = this.consensus
+                if (consensus != UNDECIDED) break
+                val proposal = if (isCondition()) SUCCESS else FAILURE
+                if (CONSENSUS.compareAndSet(this, UNDECIDED, proposal)) {
+                    consensus = proposal
+                    break
+                }
             }
-            //todo:vvvvv WRONG!!! figure out result if was helped!
-            return false
+            val success = consensus == SUCCESS
+            if (NEXT.compareAndSet(node, this, if (success) newNode else oldNext)) {
+                // only the thread the makes this update actually finishes add operation
+                if (success) newNode.finishAdd(oldNext)
+            }
+            return success
         }
     }
 
@@ -67,7 +89,7 @@ public open class LockFreeLinkedListNode {
     internal fun next(): Node = next.unwrap()
 
     @PublishedApi
-    internal fun <T : Node> addFirstCC(node: T, condAdd: CondAdd?): T? {
+    internal fun addFirstCC(node: Node, condAdd: CondAdd?): Boolean {
         require(node.isFresh)
         condAdd?.newNode = node
         while (true) { // lock-free loop on next
@@ -77,15 +99,13 @@ public open class LockFreeLinkedListNode {
             condAdd?.oldNext = next
             if (NEXT.compareAndSet(this, next, condAdd ?: node)) {
                 // added successfully (linearized add) -- fixup the list
-                if (condAdd != null) return if (condAdd.completeAdd(this)) node else null
-                finishAdd(next)
-                return node
+                return condAdd?.completeAdd(this) ?: run { node.finishAdd(next); true }
             }
         }
     }
 
     @PublishedApi
-    internal fun <T : Node> addLastCC(node: T, condAdd: CondAdd?): T? {
+    internal fun addLastCC(node: Node, condAdd: CondAdd?): Boolean {
         require(node.isFresh)
         condAdd?.newNode = node
         while (true) { // lock-free loop on prev.next
@@ -99,9 +119,7 @@ public open class LockFreeLinkedListNode {
             condAdd?.oldNext = this
             if (NEXT.compareAndSet(prev, this, condAdd ?: node)) {
                 // added successfully (linearized add) -- fixup the list
-                if (condAdd != null) return if (condAdd.completeAdd(prev)) node else null
-                finishAdd(this)
-                return node
+                return condAdd?.completeAdd(prev) ?: run { node.finishAdd(this); true }
             }
         }
     }
@@ -238,12 +256,12 @@ public open class LockFreeLinkedListHead : LockFreeLinkedListNode() {
     /**
      * Adds first item to this list.
      */
-    public fun <T : Node> addFirst(node: T): T = addFirstCC(node, null)!!
+    public fun addFirst(node: Node) { addFirstCC(node, null) }
 
     /**
      * Adds first item to this list atomically if the [condition] is true.
      */
-    public inline fun <T : Node> addFirstIf(node: T, crossinline condition: () -> Boolean): T? =
+    public inline fun addFirstIf(node: Node, crossinline condition: () -> Boolean): Boolean =
         addFirstCC(node, object : CondAdd() {
             override fun isCondition(): Boolean = condition()
         })
@@ -251,12 +269,12 @@ public open class LockFreeLinkedListHead : LockFreeLinkedListNode() {
     /**
      * Adds last item to this list.
      */
-    public fun <T : Node> addLast(node: T): T = addLastCC(node, null)!!
+    public fun addLast(node: Node) { addLastCC(node, null) }
 
     /**
      * Adds last item to this list atomically if the [condition] is true.
      */
-    public inline fun <T : Node> addLastIf(node: T, crossinline condition: () -> Boolean): T? =
+    public inline fun addLastIf(node: Node, crossinline condition: () -> Boolean): Boolean =
         addLastCC(node, object : CondAdd() {
             override fun isCondition(): Boolean = condition()
         })
