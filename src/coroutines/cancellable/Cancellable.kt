@@ -10,41 +10,23 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater
 // --------------- core cancellable interfaces ---------------
 
 /**
- * A cancellable activity. The state transition diagram of cancellable activity is:
- * ```
- *     +----------+     +-----------+
- *     |  Active  | --> | Cancelled |
- *     +----------+     +-----------+
- *          |
- *          V
- *     +----------+
- *     | Inactive |
- *     +----------+
- * ```
- * The state can be queried with [isActive] and [isCancelled] functions that correspond to the top two states.
- * This class is thread-safe.
+ * A cancellable activity. This class is thread-safe.
  */
 public interface Cancellable : CoroutineContextElement {
     companion object : CoroutineContextKey<Cancellable>
     public override val contextKey get() = Cancellable
 
     /**
-     * Returns `true` when this activity is still active and can be cancelled.
-     */
-    public val isActive: Boolean
-
-    /**
-     * Returns `true` when this activity was already cancelled. It implies that it is not [isActive].
+     * Returns `true` when this activity was cancelled.
      */
     public val isCancelled: Boolean
 
     /**
      * Registers cancel handler. The action depends on the state of this activity.
      * * When activity [isCancelled], then the handler is immediately invoked.
-     * * Otherwise, When activity not [isActive], it does nothing.
      * * Otherwise, handler will be invoked once when this activity is cancelled.
      * The resulting [CancelRegistration] can be used to [CancelRegistration.unregisterCancelHandler] if this
-     * registration is not longer needed. There is no need to unregister on
+     * registration is not longer needed. There is no need to unregister after cancellation.
      */
     public fun registerCancelHandler(handler: CancelHandler): CancelRegistration
 }
@@ -70,7 +52,7 @@ typealias CancellationException = CancellationException
 public open class CancellationScope(outer: Cancellable? = null) : Cancellable {
     // keeps a stack of cancel listeners or a special CANCELLED, other values denote completed scope
     @Volatile
-    private var state: Any? = ACTIVE
+    private var state: Any? = Active() // will drop the list on cancel
 
     // directly pass HandlerNode to outer scope to optimize one closure object (see makeNode)
     private val registration: CancelRegistration? = outer?.registerCancelHandler(object : HandlerNode() {
@@ -83,65 +65,45 @@ public open class CancellationScope(outer: Cancellable? = null) : Cancellable {
             AtomicReferenceFieldUpdater.newUpdater(CancellationScope::class.java, Any::class.java, "state")
 
         @JvmStatic
-        val ACTIVE: ActiveNode = object : ActiveNode {} // ACTIVE is ActiveNode
-
-        @JvmStatic
-        val CANCELLED: Any = Any() // CANCELLED is NOT ActiveNode
+        val CANCELLED: Any = Any()
     }
-
-    protected open fun unwrapState(state: Any?): Any? = state
-    protected open fun rewrapState(prevState: Any?, newState: Any?): Any? = newState
 
     protected fun getState(): Any? = state
 
     protected fun compareAndSetState(expect: Any?, update: Any?): Boolean {
-        require(unwrapState(expect) is ActiveNode)
+        require(update !is Active) // cannot go back to active state
         if (!STATE.compareAndSet(this, expect, update)) return false
-        if (unwrapState(update) !is ActiveNode) {
-            registration?.unregisterCancelHandler()
-        }
+        if (expect is Active) registration?.unregisterCancelHandler() // made active -> inactive transition
         return true
     }
 
-    public override val isActive: Boolean get() = unwrapState(state) is ActiveNode
-
-    public override val isCancelled: Boolean get() = state == CANCELLED
+    public override val isCancelled: Boolean get() = state !is Active
 
     public override fun registerCancelHandler(handler: CancelHandler): CancelRegistration {
         var nodeCache: HandlerNode? = null
         while (true) { // lock-free loop on state
             val state = this.state
-            if (state == CANCELLED) {
+            if (state !is Active) {
                 handler(this)
                 return NoCancelRegistration
             }
-            val u = unwrapState(state) as? ActiveNode ?: return NoCancelRegistration  // not active anymore
-            var list = u as? HandlerList
             val node = nodeCache ?: makeNode(handler).apply { nodeCache = this }
-            if (list == null) {
-                list = HandlerList()
-                list.addFirst(node)
-                if (STATE.compareAndSet(this, state, list)) return node
-            } else {
-                if(list.addLastIf(node) { this.state == state } != null) return node
-            }
+            if (state.addLastIf(node) { this.state == state }) return node
         }
     }
     public open fun cancel() {
         while (true) { // lock-free loop on state
-            val state = this.state
-            val u = unwrapState(state) as? ActiveNode ?: return // not active anymore
-            if (STATE.compareAndSet(this, state, CANCELLED)) {
-                registration?.unregisterCancelHandler()
-                onCancel(state, u as? HandlerList)
+            val state = this.state as? Active ?: return // quit if not active anymore
+            if (compareAndSetState(state, CANCELLED)) {
+                onCancel(state)
                 return
             }
         }
     }
 
-    private fun onCancel(state: Any?, listeners: HandlerList?)  {
+    private fun onCancel(state: Active)  {
         var suppressedException: Throwable? = null
-        listeners?.forEach<HandlerNode> { node ->
+        state.forEach<HandlerNode> { node ->
             try {
                 node.invoke(this)
             } catch (ex: Throwable) {
@@ -149,10 +111,10 @@ public open class CancellationScope(outer: Cancellable? = null) : Cancellable {
                 suppressedException = ex
             }
         }
-        afterCancel(state, suppressedException)
+        afterCancel(suppressedException)
     }
 
-    protected open fun afterCancel(state: Any?, suppressedException: Throwable?) {
+    protected open fun afterCancel(suppressedException: Throwable?) {
         if (suppressedException != null) throw suppressedException
     }
 
@@ -161,9 +123,7 @@ public open class CancellationScope(outer: Cancellable? = null) : Cancellable {
             override fun invoke(scope: Cancellable) = handler.invoke(scope)
         }
 
-    protected interface ActiveNode
-
-    private class HandlerList : LockFreeLinkedListHead(), ActiveNode
+    protected class Active : LockFreeLinkedListHead()
 
     private abstract class HandlerNode : LockFreeLinkedListNode(), CancelRegistration, CancelHandler {
         override fun unregisterCancelHandler() = remove()

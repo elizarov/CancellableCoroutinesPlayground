@@ -7,19 +7,12 @@ import kotlin.coroutines.*
  * Alternative coroutines library with [createCoroutine] and [startCoroutine] that accept [CoroutineContext]
  * parameter and [suspendCoroutine] the provides [CoroutineContinuation] with context.
  */
-
-public fun <T> (suspend  () -> T).createCoroutine(
-        completion: Continuation<T>,
-        context: CoroutineContext = EmptyCoroutineContext
-): Continuation<Unit> {
-    return createCoroutine(completion = completion, dispatcher = ContextDispatcherImpl(context))
+public fun <T> (suspend  () -> T).createCoroutine(completion: CoroutineContinuation<T>): Continuation<Unit> {
+    return createCoroutine(completion = completion, dispatcher = ContextDispatcherImpl(completion.context))
 }
 
-public fun <T> (suspend  () -> T).startCoroutine(
-        completion: Continuation<T>,
-        context: CoroutineContext = EmptyCoroutineContext
-) {
-    startCoroutine(completion = completion, dispatcher = ContextDispatcherImpl(context))
+public fun <T> (suspend  () -> T).startCoroutine(completion: CoroutineContinuation<T>) {
+    startCoroutine(completion = completion, dispatcher = ContextDispatcherImpl(completion.context))
 }
 
 public interface CoroutineContinuation<in T> : Continuation<T> {

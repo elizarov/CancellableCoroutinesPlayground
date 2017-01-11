@@ -1,9 +1,9 @@
 package coroutines
 
-import coroutines.futures.async
-import coroutines.futures.await
 import coroutines.cancellable.CancellationException
-import coroutines.cancellable.withTimeout
+import coroutines.futures.asyncFuture
+import coroutines.futures.await
+import coroutines.timeout.withTimeout
 import java.util.concurrent.CompletableFuture
 
 fun main(args: Array<String>) {
@@ -12,7 +12,8 @@ fun main(args: Array<String>) {
         s
     }
 
-    val f = async<String> {
+    val f = asyncFuture<String> {
+        log("Started f")
         val a = supplySlow("A").await()
         log("a = $a")
         withTimeout(1000L) {

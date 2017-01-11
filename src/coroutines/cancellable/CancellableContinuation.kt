@@ -1,5 +1,6 @@
 package coroutines.cancellable
 
+import coroutines.context.CoroutineContext
 import coroutines.context.CoroutineContinuation
 import coroutines.context.suspendCoroutineOrReturn
 import kotlin.coroutines.CoroutineIntrinsics.SUSPENDED
@@ -12,7 +13,7 @@ public interface CancellableContinuation<in T> : CoroutineContinuation<T>, Cance
 
 public inline suspend fun <T> suspendCancellableCoroutine(crossinline block: (CancellableContinuation<T>) -> Unit): T =
     suspendCoroutineOrReturn { c ->
-        val safe = SafeCancellableContinuation(c, c.context[Cancellable])
+        val safe = SafeCancellableContinuation(c)
         block(safe)
         safe.getResult()
     }
@@ -21,35 +22,22 @@ public inline suspend fun <T> suspendCancellableCoroutine(crossinline block: (Ca
 
 @PublishedApi
 internal class SafeCancellableContinuation<in T>(
-        private val delegate: CoroutineContinuation<T>,
-        cancellable: Cancellable?
-) : CancellationScope(cancellable), CancellableContinuation<T>, CoroutineContinuation<T> by delegate {
+        private val delegate: CoroutineContinuation<T>
+) : CancellationScope(delegate.context[Cancellable]), CancellableContinuation<T>, CoroutineContinuation<T> {
+    override val context: CoroutineContext by lazy { delegate.context + this@SafeCancellableContinuation }
+
+    // only updated from the thread that invoked suspendCancellableCoroutine
+    private var suspendedThread: Thread? = Thread.currentThread()
+
     private class Fail(val exception: Throwable)
-    private class Suspended(val state: Any?)
-
-    private companion object {
-        @JvmStatic
-        val SUSPENDED_ACTIVE = Suspended(ACTIVE) // Optimization (when no cancellation required)
-
-        @JvmStatic
-        val RESUMED: Any? = Any()
-
-        @JvmStatic
-        fun makeSuspended(state: Any?) = if (state == ACTIVE) SUSPENDED_ACTIVE else Suspended(state)
-    }
-
-    override fun unwrapState(state: Any?): Any? = (state as? Suspended)?.state ?: state
-
-    override fun rewrapState(prevState: Any?, newState: Any?): Any? =
-        if (prevState is Suspended) makeSuspended(newState) else newState
 
     override fun resume(value: T) {
         while (true) { // lock-free loop on state
-            val cur = getState() // atomic read
-            when (cur) {
-                is ActiveNode -> if (compareAndSetState(cur, value)) return
-                is Suspended -> if (compareAndSetState(cur, RESUMED)) {
-                    delegate.resume(value)
+            val state = getState() // atomic read
+            when (state) {
+                is Active -> if (compareAndSetState(state, value)) {
+                    if (suspendedThread === Thread.currentThread()) suspendedThread = null
+                        else delegate.resume(value)
                     return
                 }
                 CANCELLED -> return // ignore resumes on cancelled continuation
@@ -62,36 +50,37 @@ internal class SafeCancellableContinuation<in T>(
         while (true) { // lock-free loop on state
             val cur = getState() // atomic read
             when (cur) {
-                is ActiveNode -> if (compareAndSetState(cur, Fail(exception))) return
-                is Suspended -> if (compareAndSetState(cur, RESUMED)) {
-                    delegate.resumeWithException(exception)
+                is Active -> if (compareAndSetState(cur, Fail(exception))) {
+                    if (suspendedThread === Thread.currentThread()) suspendedThread = null
+                        else delegate.resumeWithException(exception)
                     return
                 }
-                CANCELLED -> return // ignore resumes on cancelled continuation
+                CANCELLED -> return // ignore resumes on cancelled continuation // todo: suppress exception?
                 else -> throw IllegalStateException("Already resumed")
             }
         }
     }
 
     fun getResult(): Any? {
-        while (true) { // lock-free loop on state
-            val cur = getState() // atomic read
-            when (cur) {
-                is ActiveNode -> if (compareAndSetState(cur, makeSuspended(cur))) return SUSPENDED
-                CANCELLED -> throw CancellationException()
-                RESUMED -> return SUSPENDED // already called continuation, indicate SUSPENDED upstream
-                is Fail -> throw cur.exception
-                else -> return cur // result value must be there
-            }
+        if (suspendedThread != null) {
+            suspendedThread = null
+            return SUSPENDED
         }
+        val state = getState()
+        if (state is Fail) throw state.exception
+        return state
     }
 
-    override fun afterCancel(state: Any?, suppressedException: Throwable?) {
-        if (state is Suspended) {
-            val cancellationException = CancellationException()
-            if (suppressedException != null) cancellationException.addSuppressed(suppressedException)
+    override fun afterCancel(suppressedException: Throwable?) {
+        val cancellationException = CancellationException()
+        if (suppressedException != null) cancellationException.addSuppressed(suppressedException)
+        if (suspendedThread === Thread.currentThread()) {
+            // cancelled during suspendCancellableCoroutine in its thread
+            suspendedThread = null
+            compareAndSetState(CANCELLED, Fail(cancellationException))
+        } else {
+            // cancelled later or in other thread
             delegate.resumeWithException(cancellationException)
         }
-        if (suppressedException != null) throw suppressedException
     }
 }

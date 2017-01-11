@@ -6,10 +6,10 @@ import kotlin.coroutines.RestrictsSuspension
 import kotlin.coroutines.createCoroutine
 
 /**
- * Scope for [sequence] and [iterator] blocks.
+ * Scope for [buildSequence] and [buildIterator] blocks.
  */
 @RestrictsSuspension
-public abstract class YieldScope<in T> internal constructor() {
+public abstract class SequenceBuilder<in T> internal constructor() {
     /**
      * Yields a value.
      */
@@ -32,23 +32,21 @@ public abstract class YieldScope<in T> internal constructor() {
 }
 
 /**
- * Produces lazy sequence.
+ * Builds lazy sequence.
  */
-public fun <T> sequence(block: suspend YieldScope<T>.() -> Unit): Sequence<T> =
-    object : Sequence<T> {
-        override fun iterator(): Iterator<T> = iterator(block)
-    }
+public fun <T> buildSequence(block: suspend SequenceBuilder<T>.() -> Unit): Sequence<T> =
+    Sequence { buildIterator(block) }
 
 /**
- * Produces lazy iterator.
+ * Builds lazy iterator.
  */
-public fun <T> iterator(block: suspend YieldScope<T>.() -> Unit): Iterator<T> {
-    val iterator = YieldScopeImpl<T>()
+public fun <T> buildIterator(block: suspend SequenceBuilder<T>.() -> Unit): Iterator<T> {
+    val iterator = SequenceBuilderImpl<T>()
     iterator.nextStep = block.createCoroutine(receiver = iterator, completion = iterator)
     return iterator
 }
 
-private class YieldScopeImpl<T>: YieldScope<T>(), Iterator<T>, Continuation<Unit> {
+private class SequenceBuilderImpl<T>: SequenceBuilder<T>(), Iterator<T>, Continuation<Unit> {
     var computedNext = false
     var nextStep: Continuation<Unit>? = null
     var nextValue: T? = null

@@ -1,6 +1,6 @@
 package coroutines.util
 
-import coroutines.sequence.iterator
+import coroutines.sequence.buildIterator
 import org.junit.Test
 import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
@@ -55,7 +55,7 @@ class LockFreeLinkedListStressTest {
         // verification
         println("Verify result")
         list.validate()
-        val expected = iterator {
+        val expected = buildIterator {
             for (i in nAdded - 1 downTo -nAdded)
                 if (!shallRemove(i))
                     yield(i)
