@@ -172,16 +172,17 @@ private class CombinedContext(val left: CoroutineContext, val element: Coroutine
 }
 
 private fun CoroutineContext.plusImpl(other: CoroutineContext): CoroutineContext =
-    other.fold(this) { acc, element ->
-        val removed = acc.minusKey(element.contextKey)
-        if (removed == EmptyCoroutineContext) element else {
-            // make sure dispatcher is always last in the context
-            val dispatcher = removed[CoroutineDispatcher]
-            if (dispatcher == null) CombinedContext(removed, element) else {
-                val left = removed.minusKey(CoroutineDispatcher)
-                if (left == EmptyCoroutineContext) CombinedContext(element, dispatcher) else
-                    CombinedContext(CombinedContext(left, element), dispatcher)
+    if (other == EmptyCoroutineContext) this else // fast path -- avoid lambda creation
+        other.fold(this) { acc, element ->
+            val removed = acc.minusKey(element.contextKey)
+            if (removed == EmptyCoroutineContext) element else {
+                // make sure dispatcher is always last in the context
+                val dispatcher = removed[CoroutineDispatcher]
+                if (dispatcher == null) CombinedContext(removed, element) else {
+                    val left = removed.minusKey(CoroutineDispatcher)
+                    if (left == EmptyCoroutineContext) CombinedContext(element, dispatcher) else
+                        CombinedContext(CombinedContext(left, element), dispatcher)
+                }
             }
         }
-    }
 

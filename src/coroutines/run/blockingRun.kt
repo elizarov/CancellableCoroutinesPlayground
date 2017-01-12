@@ -1,33 +1,39 @@
 package coroutines.run
 
+import coroutines.cancellable.CancellationScope
 import coroutines.context.CoroutineContext
 import coroutines.context.CoroutineContinuation
 import coroutines.context.EmptyCoroutineContext
 import coroutines.context.startCoroutine
+import coroutines.current.defaultCoroutineContext
 import java.util.concurrent.locks.LockSupport
 
 /**
- * Runs coroutine and blocks current thread until its completion.
+ * Runs coroutine and *blocks* current thread until its completion.
  */
 public fun <T> blockingRun(context: CoroutineContext = EmptyCoroutineContext, block: suspend () -> T): T {
-    val blocking = BlockingCompletion<T>(context)
+    val blocking = BlockingCompletion<T>(defaultCoroutineContext + context)
     block.startCoroutine(blocking)
     return blocking.awaitBlocking()
 }
 
-private class BlockingCompletion<T>(override val context: CoroutineContext) : CoroutineContinuation<T> {
+private class BlockingCompletion<T>(outerContext: CoroutineContext) : CancellationScope(), CoroutineContinuation<T> {
     val blockedThread: Thread = Thread.currentThread()
     var value: T? = null
     var exception: Throwable? = null
 
+    override val context: CoroutineContext = outerContext + this
+
     override fun resume(value: T) {
         this.value = value
         LockSupport.unpark(blockedThread)
+        cancel()
     }
 
     override fun resumeWithException(exception: Throwable) {
         this.exception = exception
         LockSupport.unpark(blockedThread)
+        cancel(exception)
     }
 
     fun awaitBlocking(): T {

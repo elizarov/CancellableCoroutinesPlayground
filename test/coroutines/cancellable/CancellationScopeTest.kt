@@ -49,6 +49,30 @@ class CancellationScopeTest {
     }
 
     @Test
+    fun testUnregisterInHandler() {
+        val scope = CancellationScope()
+        val n = 100
+        val fireCount = IntArray(n)
+        for (i in 0 until n) {
+            var registration: CancelRegistration? = null
+            registration = scope.registerCancelHandler {
+                fireCount[i]++
+                registration!!.unregisterCancelHandler()
+            }
+        }
+        assertFalse(scope.isCancelled)
+        for (i in 0 until n) assertEquals(0, fireCount[i])
+        // cancel once
+        scope.cancel()
+        assertTrue(scope.isCancelled)
+        for (i in 0 until n) assertEquals(1, fireCount[i])
+        // cancel again
+        scope.cancel()
+        assertTrue(scope.isCancelled)
+        for (i in 0 until n) assertEquals(1, fireCount[i])
+    }
+
+    @Test
     fun testManyHandlersWithUnregister() {
         val scope = CancellationScope()
         val n = 100

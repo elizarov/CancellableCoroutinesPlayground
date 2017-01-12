@@ -29,12 +29,12 @@ public inline suspend fun <T> suspendCancellableCoroutine(crossinline block: (Ca
 internal class SafeCancellableContinuation<in T>(
         private val delegate: CoroutineContinuation<T>
 ) : CancellationScope(delegate.context[Cancellable]), CancellableContinuation<T> {
-    override val context: CoroutineContext by lazy { delegate.context + this@SafeCancellableContinuation }
+    override val context: CoroutineContext = delegate.context + this
 
     // only updated from the thread that invoked suspendCancellableCoroutine
     private var suspendedThread: Thread? = Thread.currentThread()
 
-    private class Fail(reason: Throwable) : Cancelled(reason)
+    private class Failed(reason: Throwable) : Cancelled(reason)
 
     override fun resume(value: T) {
         while (true) { // lock-free loop on state
@@ -51,7 +51,7 @@ internal class SafeCancellableContinuation<in T>(
         while (true) { // lock-free loop on state
             val cur = getState() // atomic read
             when (cur) {
-                is Active -> if (compareAndSetState(cur, Fail(exception))) return
+                is Active -> if (compareAndSetState(cur, Failed(exception))) return
                 CANCELLED -> return // ignore resumes on cancelled continuation // todo: suppress exception?
                 else -> throw IllegalStateException("Already resumed")
             }
@@ -69,7 +69,7 @@ internal class SafeCancellableContinuation<in T>(
     }
 
     private fun retrieveException(state: Cancelled): Throwable {
-        if (state is Fail || state.reason is CancellationException) return state.reason!!
+        if (state is Failed || state.reason is CancellationException) return state.reason!!
         // was cancelled but the reason is not CancellationException
         return CancellationException().apply { initCause(state.reason) }
     }
@@ -81,7 +81,7 @@ internal class SafeCancellableContinuation<in T>(
             if (newState is Cancelled && newState.reason != null) {
                 closeException.addSuppressed(newState.reason)
             }
-            result = Fail(closeException)
+            result = Failed(closeException)
         }
         if (suspendedThread === Thread.currentThread()) {
             // cancelled during suspendCancellableCoroutine in its thread

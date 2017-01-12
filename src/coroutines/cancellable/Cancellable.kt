@@ -30,6 +30,15 @@ public interface Cancellable : CoroutineContextElement {
     public fun registerCancelHandler(handler: CancelHandler): CancelRegistration
 
     /**
+     * Unregisters a specified cancel [registration] when this activity is cancelled.
+     * This is a shortcut for the following code with slightly more efficient implementation.
+     * ```
+     * registerCancelHandler { registration.unregisterCancelHandler() }
+     * ```
+     */
+    public fun unregisterOnCancel(registration: CancelRegistration)
+
+    /**
      * Cancel this activity with an optional cancellation reason. The result is `true` if activity was
      * cancelled and `false` otherwise (if it was already cancelled).
      */
@@ -62,6 +71,7 @@ public open class CancellationScope(outer: Cancellable? = null) : Cancellable {
     // directly pass HandlerNode to outer scope to optimize one closure object (see makeNode)
     private val registration: CancelRegistration? = outer?.registerCancelHandler(object : HandlerNode() {
         override fun invoke(reason: Throwable?) { cancel(reason) }
+        override fun toString(): String = "CancelOnOuter[$outer]"
     })
 
     protected companion object {
@@ -101,6 +111,13 @@ public open class CancellationScope(outer: Cancellable? = null) : Cancellable {
         }
     }
 
+    public override fun unregisterOnCancel(registration: CancelRegistration) {
+        registerCancelHandler(object : HandlerNode() {
+            override fun invoke(reason: Throwable?) = registration.unregisterCancelHandler()
+            override fun toString(): String = "UnregisterOnCancel[$registration]"
+        })
+    }
+
     public override fun cancel(reason: Throwable?): Boolean {
         while (true) { // lock-free loop on state
             val state = this.state as? Active ?: return false // quit if not active anymore
@@ -129,6 +146,7 @@ public open class CancellationScope(outer: Cancellable? = null) : Cancellable {
     private fun makeNode(handler: CancelHandler): HandlerNode = handler as? HandlerNode ?:
         object : HandlerNode() {
             override fun invoke(reason: Throwable?) = handler.invoke(reason)
+            override fun toString() = "HandlerNode[${handler::class.java.name}@${Integer.toHexString(System.identityHashCode(handler))}]"
         }
 
     protected open class Cancelled(val reason: Throwable?)
