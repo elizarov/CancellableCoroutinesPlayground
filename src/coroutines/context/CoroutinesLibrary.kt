@@ -46,11 +46,19 @@ private fun getCoroutineContext(d: ContinuationDispatcher?) =
 
 private class ContextDispatcherImpl(var context: CoroutineContext) : ContinuationDispatcher {
     override fun <T> dispatchResume(value: T, continuation: Continuation<T>): Boolean {
-        return context[CoroutineDispatcher]?.dispatchResume(value, continuation) ?: false
+        contextualize(continuation).resume(value)
+        return true
     }
 
     override fun dispatchResumeWithException(exception: Throwable, continuation: Continuation<*>): Boolean {
-        return context[CoroutineDispatcher]?.dispatchResumeWithException(exception, continuation) ?: false
+        contextualize(continuation).resumeWithException(exception)
+        return true
+    }
+
+    private fun  <T> contextualize(continuation: Continuation<T>): CoroutineContinuation<T> {
+        return context.contextualizeContinuation(object : CoroutineContinuation<T>, Continuation<T> by continuation {
+            override val context: CoroutineContext get() = this@ContextDispatcherImpl.context
+        })
     }
 }
 

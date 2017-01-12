@@ -4,7 +4,6 @@ import coroutines.context.CoroutineContextElement
 import coroutines.context.CoroutineContextKey
 import coroutines.util.LockFreeLinkedListHead
 import coroutines.util.LockFreeLinkedListNode
-import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater
 
 // --------------- core cancellable interfaces ---------------
@@ -31,9 +30,10 @@ public interface Cancellable : CoroutineContextElement {
     public fun registerCancelHandler(handler: CancelHandler): CancelRegistration
 
     /**
-     * Cancel this activity with an optional cancellation reason.
+     * Cancel this activity with an optional cancellation reason. The result is `true` if activity was
+     * cancelled and `false` otherwise (if it was already cancelled).
      */
-    public fun cancel(reason: Throwable? = null)
+    public fun cancel(reason: Throwable? = null): Boolean
 }
 
 typealias CancelHandler = (Throwable?) -> Unit
@@ -42,7 +42,7 @@ public interface CancelRegistration {
     fun unregisterCancelHandler()
 }
 
-typealias CancellationException = CancellationException
+typealias CancellationException = java.util.concurrent.CancellationException
 
 // --------------- utility classes to simplify cancellable implementation
 
@@ -61,7 +61,7 @@ public open class CancellationScope(outer: Cancellable? = null) : Cancellable {
 
     // directly pass HandlerNode to outer scope to optimize one closure object (see makeNode)
     private val registration: CancelRegistration? = outer?.registerCancelHandler(object : HandlerNode() {
-        override fun invoke(failure: Throwable?) = cancel(failure)
+        override fun invoke(reason: Throwable?) { cancel(reason) }
     })
 
     protected companion object {
@@ -101,11 +101,11 @@ public open class CancellationScope(outer: Cancellable? = null) : Cancellable {
         }
     }
 
-    public override fun cancel(reason: Throwable?) {
+    public override fun cancel(reason: Throwable?): Boolean {
         while (true) { // lock-free loop on state
-            val state = this.state as? Active ?: return // quit if not active anymore
+            val state = this.state as? Active ?: return false // quit if not active anymore
             val update = if (reason == null) CANCELLED else Cancelled(reason)
-            if (compareAndSetState(state, update)) return
+            if (compareAndSetState(state, update)) return true
         }
     }
 
@@ -128,7 +128,7 @@ public open class CancellationScope(outer: Cancellable? = null) : Cancellable {
 
     private fun makeNode(handler: CancelHandler): HandlerNode = handler as? HandlerNode ?:
         object : HandlerNode() {
-            override fun invoke(failure: Throwable?) = handler.invoke(failure)
+            override fun invoke(reason: Throwable?) = handler.invoke(reason)
         }
 
     protected open class Cancelled(val reason: Throwable?)
@@ -137,7 +137,7 @@ public open class CancellationScope(outer: Cancellable? = null) : Cancellable {
 
     private abstract class HandlerNode : LockFreeLinkedListNode(), CancelRegistration, CancelHandler {
         override fun unregisterCancelHandler() = remove()
-        override abstract fun invoke(failure: Throwable?)
+        override abstract fun invoke(reason: Throwable?)
     }
 
     protected object NoCancelRegistration : CancelRegistration {

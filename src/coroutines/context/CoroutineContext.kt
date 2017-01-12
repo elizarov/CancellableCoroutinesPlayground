@@ -35,7 +35,15 @@ public interface CoroutineContext {
      * Returns a context contention elements from this context, but without an element with
      * the specified [contextKey].
      */
-    public fun remove(contextKey: CoroutineContextKey<*>): CoroutineContext
+    public fun minusKey(contextKey: CoroutineContextKey<*>): CoroutineContext
+
+    /**
+     * Contextualizes the given [continuation] by applying elements of this context to it. Application code should
+     * not call this method directly as it is invoked by coroutines framework appropriately and the resulting
+     * contextualized continuations are efficiently cached. This function shall be implemented by context
+     * elements that need to intercept coroutine lifecycle.
+     */
+    public fun <T> contextualizeContinuation(continuation: CoroutineContinuation<T>): CoroutineContinuation<T>
 }
 
 /**
@@ -60,8 +68,11 @@ public interface CoroutineContextElement : CoroutineContext {
     public override operator fun plus(other: CoroutineContext): CoroutineContext =
         plusImpl(other)
 
-    public override fun remove(contextKey: CoroutineContextKey<*>): CoroutineContext =
+    public override fun minusKey(contextKey: CoroutineContextKey<*>): CoroutineContext =
         if (this.contextKey == contextKey) EmptyCoroutineContext else this
+
+    public override fun <T> contextualizeContinuation(continuation: CoroutineContinuation<T>): CoroutineContinuation<T> =
+        continuation
 }
 
 /**
@@ -77,7 +88,8 @@ public object EmptyCoroutineContext : CoroutineContext {
     public override operator fun contains(element: CoroutineContextElement): Boolean = false
     public override fun <R> fold(initial: R, operation: (R, CoroutineContextElement) -> R): R = initial
     public override fun plus(other: CoroutineContext): CoroutineContext = other
-    public override fun remove(contextKey: CoroutineContextKey<*>): CoroutineContext = this
+    public override fun minusKey(contextKey: CoroutineContextKey<*>): CoroutineContext = this
+    public override fun <T> contextualizeContinuation(continuation: CoroutineContinuation<T>): CoroutineContinuation<T> = continuation
     public override fun hashCode(): Int = 0
     public override fun toString(): String = "EmptyCoroutineContext"
 }
@@ -113,21 +125,24 @@ private class CombinedContext(val left: CoroutineContext, val element: Coroutine
         }
     }
 
-    override fun <R> fold(initial: R, operation: (R, CoroutineContextElement) -> R): R =
+    public override fun <R> fold(initial: R, operation: (R, CoroutineContextElement) -> R): R =
         operation(left.fold(initial, operation), element)
 
     public override operator fun plus(other: CoroutineContext): CoroutineContext =
         plusImpl(other)
 
-    override fun remove(contextKey: CoroutineContextKey<*>): CoroutineContext {
+    public override fun minusKey(contextKey: CoroutineContextKey<*>): CoroutineContext {
         element[contextKey]?.let { return left }
-        val newLeft = left.remove(contextKey)
+        val newLeft = left.minusKey(contextKey)
         return when (newLeft) {
             left -> this
             EmptyCoroutineContext -> element
             else -> CombinedContext(newLeft, element)
         }
     }
+
+    public override fun <T> contextualizeContinuation(continuation: CoroutineContinuation<T>): CoroutineContinuation<T> =
+        element.contextualizeContinuation(left.contextualizeContinuation(continuation))
 
     private fun size(): Int =
         if (left is CombinedContext) left.size() + 1 else 2
@@ -158,7 +173,15 @@ private class CombinedContext(val left: CoroutineContext, val element: Coroutine
 
 private fun CoroutineContext.plusImpl(other: CoroutineContext): CoroutineContext =
     other.fold(this) { acc, element ->
-        val removed = acc.remove(element.contextKey)
-        if (removed == EmptyCoroutineContext) element else CombinedContext(removed, element)
+        val removed = acc.minusKey(element.contextKey)
+        if (removed == EmptyCoroutineContext) element else {
+            // make sure dispatcher is always last in the context
+            val dispatcher = removed[CoroutineDispatcher]
+            if (dispatcher == null) CombinedContext(removed, element) else {
+                val left = removed.minusKey(CoroutineDispatcher)
+                if (left == EmptyCoroutineContext) CombinedContext(element, dispatcher) else
+                    CombinedContext(CombinedContext(left, element), dispatcher)
+            }
+        }
     }
 

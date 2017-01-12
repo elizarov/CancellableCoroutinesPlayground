@@ -2,6 +2,7 @@ package coroutines.context
 
 import org.junit.Assert.*
 import org.junit.Test
+import kotlin.coroutines.Continuation
 
 class CoroutineContextTest {
     data class CtxA(val i: Int) : CoroutineContextElement {
@@ -17,6 +18,18 @@ class CoroutineContextTest {
     data class CtxC(val i: Int) : CoroutineContextElement {
         companion object : CoroutineContextKey<CtxC>
         override val contextKey get() = CtxC
+    }
+
+    object Disp1 : CoroutineDispatcher {
+        override fun <T> dispatchResume(value: T, continuation: Continuation<T>): Boolean = false
+        override fun dispatchResumeWithException(exception: Throwable, continuation: Continuation<*>): Boolean = false
+        override fun toString(): String = "Disp1"
+    }
+
+    object Disp2 : CoroutineDispatcher {
+        override fun <T> dispatchResume(value: T, continuation: Continuation<T>): Boolean = false
+        override fun dispatchResumeWithException(exception: Throwable, continuation: Continuation<*>): Boolean = false
+        override fun toString(): String = "Disp2"
     }
 
     @Test
@@ -62,33 +75,33 @@ class CoroutineContextTest {
     }
 
     @Test
-    fun testRemove() {
+    fun testMinusKey() {
         var ctx: CoroutineContext = CtxA(1) + CtxB(2) + CtxC(3)
         assertContents(ctx, CtxA(1), CtxB(2), CtxC(3))
         assertEquals("[CtxA(i=1), CtxB(i=2), CtxC(i=3)]", ctx.toString())
 
-        ctx = ctx.remove(CtxA)
+        ctx = ctx.minusKey(CtxA)
         assertContents(ctx, CtxB(2), CtxC(3))
         assertEquals("[CtxB(i=2), CtxC(i=3)]", ctx.toString())
         assertEquals(null, ctx[CtxA])
         assertEquals(CtxB(2), ctx[CtxB])
         assertEquals(CtxC(3), ctx[CtxC])
 
-        ctx = ctx.remove(CtxC)
+        ctx = ctx.minusKey(CtxC)
         assertContents(ctx, CtxB(2))
         assertEquals("CtxB(i=2)", ctx.toString())
         assertEquals(null, ctx[CtxA])
         assertEquals(CtxB(2), ctx[CtxB])
         assertEquals(null, ctx[CtxC])
 
-        ctx = ctx.remove(CtxC)
+        ctx = ctx.minusKey(CtxC)
         assertContents(ctx, CtxB(2))
         assertEquals("CtxB(i=2)", ctx.toString())
         assertEquals(null, ctx[CtxA])
         assertEquals(CtxB(2), ctx[CtxB])
         assertEquals(null, ctx[CtxC])
 
-        ctx = ctx.remove(CtxB)
+        ctx = ctx.minusKey(CtxB)
         assertContents(ctx)
         assertEquals("EmptyCoroutineContext", ctx.toString())
         assertEquals(null, ctx[CtxA])
@@ -108,6 +121,24 @@ class CoroutineContextTest {
         assertEquals(CtxA(1), ctx[CtxA])
         assertEquals(CtxB(3), ctx[CtxB])
         assertEquals(CtxC(4), ctx[CtxC])
+    }
+
+    @Test
+    fun testLastDispatcher() {
+        var ctx: CoroutineContext = EmptyCoroutineContext
+        assertContents(ctx)
+        ctx += CtxA(1)
+        assertContents(ctx, CtxA(1))
+        ctx += Disp1
+        assertContents(ctx, CtxA(1), Disp1)
+        ctx += CtxA(2)
+        assertContents(ctx, CtxA(2), Disp1)
+        ctx += CtxB(3)
+        assertContents(ctx, CtxA(2), CtxB(3), Disp1)
+        ctx += Disp2
+        assertContents(ctx, CtxA(2), CtxB(3), Disp2)
+        ctx += (CtxB(4) + CtxC(5))
+        assertContents(ctx, CtxA(2), CtxB(4), CtxC(5), Disp2)
     }
 
     @Test
