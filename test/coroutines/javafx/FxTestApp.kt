@@ -2,7 +2,6 @@ package coroutines.javafx
 
 import coroutines.current.setThreadDefaultCoroutineContext
 import coroutines.run.asyncRun
-import coroutines.timeout.sleep
 import coroutines.ui.JavaFx
 import javafx.application.Application
 import javafx.scene.Scene
@@ -47,7 +46,7 @@ class FxTestApp : Application() {
             var vx = 5
             var vy = 5
             while (true) {
-                sleep(10)
+                JavaFx.awaitPulse()
                 rect.x += vx
                 rect.y += vy
                 val xRange = 0.0 .. scene.width - rect.width
