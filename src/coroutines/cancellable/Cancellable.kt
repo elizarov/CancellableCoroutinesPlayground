@@ -1,5 +1,6 @@
 package coroutines.cancellable
 
+import coroutines.context.AbstractCoroutineContextElement
 import coroutines.context.CoroutineContextElement
 import coroutines.context.CoroutineContextKey
 import coroutines.util.LockFreeLinkedListHead
@@ -63,7 +64,7 @@ typealias CancellationException = java.util.concurrent.CancellationException
  * This is an open class designed for extension by more specific cancellable classes that might augment the
  * state and mare store addition state information for cancelled activities, like their result values.
  */
-public open class CancellationScope(outer: Cancellable? = null) : Cancellable {
+public open class CancellationScope(outer: Cancellable? = null) : AbstractCoroutineContextElement(), Cancellable {
     // keeps a stack of cancel listeners or a special CANCELLED, other values denote completed scope
     @Volatile
     private var state: Any? = Active() // will drop the list on cancel

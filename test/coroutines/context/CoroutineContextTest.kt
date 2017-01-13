@@ -4,28 +4,28 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CoroutineContextTest {
-    data class CtxA(val i: Int) : CoroutineContextElement {
+    data class CtxA(val i: Int) : AbstractCoroutineContextElement() {
         companion object : CoroutineContextKey<CtxA>
         override val contextKey get() = CtxA
     }
 
-    data class CtxB(val i: Int) : CoroutineContextElement {
+    data class CtxB(val i: Int) : AbstractCoroutineContextElement() {
         companion object : CoroutineContextKey<CtxB>
         override val contextKey get() = CtxB
     }
 
-    data class CtxC(val i: Int) : CoroutineContextElement {
+    data class CtxC(val i: Int) : AbstractCoroutineContextElement() {
         companion object : CoroutineContextKey<CtxC>
         override val contextKey get() = CtxC
     }
 
-    object Disp1 : ContinuationInterceptor {
+    object Disp1 : AbstractCoroutineContextElement(), ContinuationInterceptor {
         override fun <T> interceptContinuation(continuation: CoroutineContinuation<T>): CoroutineContinuation<T> = continuation
         override val contextKey: CoroutineContextKey<*> = ContinuationInterceptor
         override fun toString(): String = "Disp1"
     }
 
-    object Disp2 : ContinuationInterceptor {
+    object Disp2 : AbstractCoroutineContextElement(), ContinuationInterceptor {
         override fun <T> interceptContinuation(continuation: CoroutineContinuation<T>): CoroutineContinuation<T> = continuation
         override val contextKey: CoroutineContextKey<*> = ContinuationInterceptor
         override fun toString(): String = "Disp2"
@@ -158,6 +158,6 @@ class CoroutineContextTest {
         val set = ctx.fold(setOf<CoroutineContext>()) { a, b -> a + b }
         assertEquals(listOf(*elements), set.toList())
         for (elem in elements)
-            assertTrue(elem in ctx)
+            assertTrue(ctx[elem.contextKey] == elem)
     }
 }

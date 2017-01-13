@@ -3,7 +3,7 @@ package coroutines.dispatcher
 import coroutines.context.*
 import kotlin.coroutines.Continuation
 
-public abstract class CoroutineDispatcher : ContinuationInterceptor {
+public abstract class CoroutineDispatcher : AbstractCoroutineContextElement(), ContinuationInterceptor {
     public abstract fun <T> dispatchResume(value: T, continuation: Continuation<T>): Boolean
     public abstract fun dispatchResumeWithException(exception: Throwable, continuation: Continuation<*>): Boolean
 

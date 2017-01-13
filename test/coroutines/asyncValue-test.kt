@@ -3,10 +3,11 @@ package coroutines
 import coroutines.run.blockingRun
 import coroutines.timeout.sleep
 import coroutines.timeout.withTimeout
+import coroutines.ui.Swing
 import coroutines.value.AsyncValue
 import coroutines.value.asyncValue
 
-fun main(args: Array<String>) = blockingRun {
+fun main(args: Array<String>) = blockingRun(Swing) {
     val va = Array<AsyncValue<String>>(10) { i ->
         asyncValue {
             val sleepTime = i * 200L
