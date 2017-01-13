@@ -2,13 +2,13 @@ package coroutines.ui
 
 import coroutines.cancellable.CancellableContinuation
 import coroutines.cancellable.suspendCancellableCoroutine
-import coroutines.context.CoroutineDispatcher
+import coroutines.dispatcher.CoroutineDispatcher
 import javafx.animation.AnimationTimer
 import javafx.application.Platform
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.coroutines.Continuation
 
-object JavaFx : CoroutineDispatcher {
+object JavaFx : CoroutineDispatcher() {
     private val timer = Timer()
 
     init { timer.start() }

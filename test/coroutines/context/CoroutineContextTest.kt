@@ -2,7 +2,6 @@ package coroutines.context
 
 import org.junit.Assert.*
 import org.junit.Test
-import kotlin.coroutines.Continuation
 
 class CoroutineContextTest {
     data class CtxA(val i: Int) : CoroutineContextElement {
@@ -20,15 +19,15 @@ class CoroutineContextTest {
         override val contextKey get() = CtxC
     }
 
-    object Disp1 : CoroutineDispatcher {
-        override fun <T> dispatchResume(value: T, continuation: Continuation<T>): Boolean = false
-        override fun dispatchResumeWithException(exception: Throwable, continuation: Continuation<*>): Boolean = false
+    object Disp1 : ContinuationInterceptor {
+        override fun <T> interceptContinuation(continuation: CoroutineContinuation<T>): CoroutineContinuation<T> = continuation
+        override val contextKey: CoroutineContextKey<*> = ContinuationInterceptor
         override fun toString(): String = "Disp1"
     }
 
-    object Disp2 : CoroutineDispatcher {
-        override fun <T> dispatchResume(value: T, continuation: Continuation<T>): Boolean = false
-        override fun dispatchResumeWithException(exception: Throwable, continuation: Continuation<*>): Boolean = false
+    object Disp2 : ContinuationInterceptor {
+        override fun <T> interceptContinuation(continuation: CoroutineContinuation<T>): CoroutineContinuation<T> = continuation
+        override val contextKey: CoroutineContextKey<*> = ContinuationInterceptor
         override fun toString(): String = "Disp2"
     }
 

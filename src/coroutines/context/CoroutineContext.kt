@@ -36,14 +36,6 @@ public interface CoroutineContext {
      * the specified [contextKey].
      */
     public fun minusKey(contextKey: CoroutineContextKey<*>): CoroutineContext
-
-    /**
-     * Contextualizes the given [continuation] by applying elements of this context to it. Application code should
-     * not call this method directly as it is invoked by coroutines framework appropriately and the resulting
-     * contextualized continuations are efficiently cached. This function shall be implemented by context
-     * elements that need to intercept coroutine lifecycle.
-     */
-    public fun <T> contextualizeContinuation(continuation: CoroutineContinuation<T>): CoroutineContinuation<T>
 }
 
 /**
@@ -70,9 +62,6 @@ public interface CoroutineContextElement : CoroutineContext {
 
     public override fun minusKey(contextKey: CoroutineContextKey<*>): CoroutineContext =
         if (this.contextKey == contextKey) EmptyCoroutineContext else this
-
-    public override fun <T> contextualizeContinuation(continuation: CoroutineContinuation<T>): CoroutineContinuation<T> =
-        continuation
 }
 
 /**
@@ -89,7 +78,6 @@ public object EmptyCoroutineContext : CoroutineContext {
     public override fun <R> fold(initial: R, operation: (R, CoroutineContextElement) -> R): R = initial
     public override fun plus(other: CoroutineContext): CoroutineContext = other
     public override fun minusKey(contextKey: CoroutineContextKey<*>): CoroutineContext = this
-    public override fun <T> contextualizeContinuation(continuation: CoroutineContinuation<T>): CoroutineContinuation<T> = continuation
     public override fun hashCode(): Int = 0
     public override fun toString(): String = "EmptyCoroutineContext"
 }
@@ -141,9 +129,6 @@ private class CombinedContext(val left: CoroutineContext, val element: Coroutine
         }
     }
 
-    public override fun <T> contextualizeContinuation(continuation: CoroutineContinuation<T>): CoroutineContinuation<T> =
-        element.contextualizeContinuation(left.contextualizeContinuation(continuation))
-
     private fun size(): Int =
         if (left is CombinedContext) left.size() + 1 else 2
 
@@ -176,12 +161,12 @@ private fun CoroutineContext.plusImpl(other: CoroutineContext): CoroutineContext
         other.fold(this) { acc, element ->
             val removed = acc.minusKey(element.contextKey)
             if (removed == EmptyCoroutineContext) element else {
-                // make sure dispatcher is always last in the context
-                val dispatcher = removed[CoroutineDispatcher]
-                if (dispatcher == null) CombinedContext(removed, element) else {
-                    val left = removed.minusKey(CoroutineDispatcher)
-                    if (left == EmptyCoroutineContext) CombinedContext(element, dispatcher) else
-                        CombinedContext(CombinedContext(left, element), dispatcher)
+                // make sure interceptor is always last in the context (and thus is fast to get when present)
+                val interceptor = removed[ContinuationInterceptor]
+                if (interceptor == null) CombinedContext(removed, element) else {
+                    val left = removed.minusKey(ContinuationInterceptor)
+                    if (left == EmptyCoroutineContext) CombinedContext(element, interceptor) else
+                        CombinedContext(CombinedContext(left, element), interceptor)
                 }
             }
         }

@@ -1,9 +1,6 @@
 package coroutines.current
 
-import coroutines.context.CoroutineContext
-import coroutines.context.CoroutineContextElement
-import coroutines.context.CoroutineContextKey
-import coroutines.context.CoroutineContinuation
+import coroutines.context.*
 
 private val DEFAULT = ThreadLocal<CoroutineContext>()
 private val CURRENT = ThreadLocal<CoroutineContext>()
@@ -31,10 +28,10 @@ public fun setThreadDefaultCoroutineContext(context: CoroutineContext) {
     DEFAULT.set(context + CurrentContext)
 }
 
-private object CurrentContext : CoroutineContextElement, CoroutineContextKey<CurrentContext> {
+private object CurrentContext : CoroutineContextElement, CoroutineContextKey<CurrentContext>, ContinuationInterceptor {
     override val contextKey: CoroutineContextKey<*> get() = CurrentContext
 
-    override fun <T> contextualizeContinuation(continuation: CoroutineContinuation<T>): CoroutineContinuation<T> =
+    override fun <T> interceptContinuation(continuation: CoroutineContinuation<T>): CoroutineContinuation<T> =
         WithCurrentContext(continuation)
 }
 
