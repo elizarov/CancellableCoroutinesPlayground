@@ -18,7 +18,14 @@ internal val CURRENT_CONTEXT = ThreadLocal<CoroutineContext>()
  *
  * **Debugging facilities:** When assertions are enabled or when "kotlinx.coroutines.debug" system property
  * is set, every coroutine is assigned a unique consecutive identifier. Every thread that executes
- * a coroutine has its name modified to include the identifier of the currently currently coroutine.
+ * a coroutine has its name modified to include the name and identifier of the currently currently running coroutine.
+ *
+ * When one coroutine is suspended and resumes another coroutine in the same thread and a [CoroutineDispatcher]
+ * is not explicitly or dispatcher executes continuation in the same thread, then the thread name displays
+ * the whole stack of coroutine descriptions that are being executed on this thread.
+ *
+ * Coroutine name can be explicitly assigned using [CoroutineName] context element.
+ * The string "coroutine" is used as a default name.
  */
 public fun newCoroutineContext(context: CoroutineContext = EmptyCoroutineContext): CoroutineContext =
     merge(CURRENT_CONTEXT.get() ?: loadCurrentContext(), context).let {
