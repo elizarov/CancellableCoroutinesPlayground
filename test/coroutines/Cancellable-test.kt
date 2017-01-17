@@ -1,13 +1,13 @@
 package coroutines
 
 import coroutines.`try`.Try
-import coroutines.cancellable.CancellationScope
+import kotlinx.coroutines.experimental.LifetimeSupport
 import coroutines.futures.asyncFuture
 import coroutines.timeout.sleep
 import java.util.concurrent.CancellationException
 
 fun main(args: Array<String>) {
-    val scope = CancellationScope()
+    val scope = LifetimeSupport()
     log("Starting coroutines.futures.async f && g")
     val f = asyncFuture(scope) {
         log("Started f")

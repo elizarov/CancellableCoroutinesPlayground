@@ -28,9 +28,8 @@ public fun setThreadDefaultCoroutineContext(context: CoroutineContext) {
     DEFAULT.set(context + CurrentContext)
 }
 
-private object CurrentContext : AbstractCoroutineContextElement(), CoroutineContextKey<CurrentContext>, ContinuationInterceptor {
-    override val contextKey: CoroutineContextKey<*> get() = CurrentContext
-
+private object CurrentContext : AbstractCoroutineContextElement(Key), ContinuationInterceptor {
+    object Key : CoroutineContext.Key<CurrentContext>
     override fun <T> interceptContinuation(continuation: CoroutineContinuation<T>): CoroutineContinuation<T> =
         WithCurrentContext(continuation)
 }

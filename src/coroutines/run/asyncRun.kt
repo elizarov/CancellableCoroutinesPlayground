@@ -1,7 +1,7 @@
 package coroutines.run
 
-import coroutines.cancellable.Cancellable
-import coroutines.cancellable.CancellationScope
+import kotlinx.coroutines.experimental.Lifetime
+import kotlinx.coroutines.experimental.LifetimeSupport
 import coroutines.context.CoroutineContext
 import coroutines.context.CoroutineContinuation
 import coroutines.context.EmptyCoroutineContext
@@ -13,13 +13,13 @@ import coroutines.current.defaultCoroutineContext
  */
 fun asyncRun(context: CoroutineContext = EmptyCoroutineContext, block: suspend () -> Unit) {
     val ctx = defaultCoroutineContext + context
-    val scope = CancellationScope(ctx[Cancellable])
+    val scope = LifetimeSupport(ctx[Lifetime])
     block.startCoroutine(AsyncCompletion(ctx + scope))
 }
 
 private class AsyncCompletion(
     val outerContext: CoroutineContext
-) : CancellationScope(outerContext[Cancellable]), CoroutineContinuation<Unit> {
+) : LifetimeSupport(outerContext[Lifetime]), CoroutineContinuation<Unit> {
     override val context: CoroutineContext = outerContext + this
 
     override fun resume(value: Unit) {

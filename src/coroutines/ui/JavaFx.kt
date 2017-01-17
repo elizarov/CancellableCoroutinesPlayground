@@ -1,6 +1,6 @@
 package coroutines.ui
 
-import coroutines.cancellable.CancellableContinuation
+import coroutines.cancellable.LifetimeContinuation
 import coroutines.cancellable.suspendCancellableCoroutine
 import coroutines.dispatcher.CoroutineDispatcher
 import javafx.animation.AnimationTimer
@@ -31,7 +31,7 @@ object JavaFx : CoroutineDispatcher() {
 }
 
 private class Timer : AnimationTimer() {
-    val next = CopyOnWriteArrayList<CancellableContinuation<Long>>()
+    val next = CopyOnWriteArrayList<LifetimeContinuation<Long>>()
 
     override fun handle(now: Long) {
         val cur = next.toTypedArray()
@@ -40,7 +40,7 @@ private class Timer : AnimationTimer() {
             cont.resume(now)
     }
 
-    fun onNext(cont: CancellableContinuation<Long>) {
+    fun onNext(cont: LifetimeContinuation<Long>) {
         next += cont
     }
 }

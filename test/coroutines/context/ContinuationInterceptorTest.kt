@@ -4,7 +4,7 @@ import org.junit.After
 import org.junit.Test
 import kotlin.coroutines.CoroutineIntrinsics.SUSPENDED
 
-class CoroutineInterceptorTest {
+class ContinuationInterceptorTest {
     suspend fun noSuspend(v: Int): Int = v
     suspend fun noSuspendTailCall(v: Int) = noSuspend(v)
 
@@ -119,8 +119,7 @@ class CoroutineInterceptorTest {
         }
     }
 
-    inner class Interceptor : AbstractCoroutineContextElement(), ContinuationInterceptor {
-        override val contextKey: CoroutineContextKey<*> = ContinuationInterceptor
+    inner class Interceptor : AbstractCoroutineContextElement(ContinuationInterceptor), ContinuationInterceptor {
         override fun <T> interceptContinuation(continuation: CoroutineContinuation<T>): CoroutineContinuation<T> =
                 Wrapper(continuation)
     }
@@ -137,6 +136,4 @@ class CoroutineInterceptorTest {
             }
         })
     }
-
-
 }

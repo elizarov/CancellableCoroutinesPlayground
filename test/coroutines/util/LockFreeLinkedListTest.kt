@@ -1,5 +1,7 @@
 package coroutines.util
 
+import kotlinx.coroutines.experimental.util.LockFreeLinkedListHead
+import kotlinx.coroutines.experimental.util.LockFreeLinkedListNode
 import org.junit.Assert.*
 import org.junit.Test
 

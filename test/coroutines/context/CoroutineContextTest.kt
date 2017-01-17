@@ -4,30 +4,25 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CoroutineContextTest {
-    data class CtxA(val i: Int) : AbstractCoroutineContextElement() {
-        companion object : CoroutineContextKey<CtxA>
-        override val contextKey get() = CtxA
+    data class CtxA(val i: Int) : AbstractCoroutineContextElement(CtxA) {
+        companion object Key : CoroutineContext.Key<CtxA>
     }
 
-    data class CtxB(val i: Int) : AbstractCoroutineContextElement() {
-        companion object : CoroutineContextKey<CtxB>
-        override val contextKey get() = CtxB
+    data class CtxB(val i: Int) : AbstractCoroutineContextElement(CtxB) {
+        companion object Key : CoroutineContext.Key<CtxB>
     }
 
-    data class CtxC(val i: Int) : AbstractCoroutineContextElement() {
-        companion object : CoroutineContextKey<CtxC>
-        override val contextKey get() = CtxC
+    data class CtxC(val i: Int) : AbstractCoroutineContextElement(CtxC) {
+        companion object Key : CoroutineContext.Key<CtxC>
     }
 
-    object Disp1 : AbstractCoroutineContextElement(), ContinuationInterceptor {
+    object Disp1 : AbstractCoroutineContextElement(ContinuationInterceptor), ContinuationInterceptor {
         override fun <T> interceptContinuation(continuation: CoroutineContinuation<T>): CoroutineContinuation<T> = continuation
-        override val contextKey: CoroutineContextKey<*> = ContinuationInterceptor
         override fun toString(): String = "Disp1"
     }
 
-    object Disp2 : AbstractCoroutineContextElement(), ContinuationInterceptor {
+    object Disp2 : AbstractCoroutineContextElement(ContinuationInterceptor), ContinuationInterceptor {
         override fun <T> interceptContinuation(continuation: CoroutineContinuation<T>): CoroutineContinuation<T> = continuation
-        override val contextKey: CoroutineContextKey<*> = ContinuationInterceptor
         override fun toString(): String = "Disp2"
     }
 
@@ -154,10 +149,10 @@ class CoroutineContextTest {
         assertNotEquals(ctx3, ctx4)
     }
 
-    private fun  assertContents(ctx: CoroutineContext, vararg elements: CoroutineContextElement) {
+    private fun  assertContents(ctx: CoroutineContext, vararg elements: CoroutineContext.Element) {
         val set = ctx.fold(setOf<CoroutineContext>()) { a, b -> a + b }
         assertEquals(listOf(*elements), set.toList())
         for (elem in elements)
-            assertTrue(ctx[elem.contextKey] == elem)
+            assertTrue(ctx[elem.key] == elem)
     }
 }

@@ -1,6 +1,6 @@
 package coroutines.run
 
-import coroutines.cancellable.CancellationScope
+import kotlinx.coroutines.experimental.LifetimeSupport
 import coroutines.context.CoroutineContext
 import coroutines.context.CoroutineContinuation
 import coroutines.context.EmptyCoroutineContext
@@ -17,7 +17,7 @@ public fun <T> blockingRun(context: CoroutineContext = EmptyCoroutineContext, bl
     return blocking.awaitBlocking()
 }
 
-private class BlockingCompletion<T>(outerContext: CoroutineContext) : CancellationScope(), CoroutineContinuation<T> {
+private class BlockingCompletion<T>(outerContext: CoroutineContext) : LifetimeSupport(), CoroutineContinuation<T> {
     val blockedThread: Thread = Thread.currentThread()
     var value: T? = null
     var exception: Throwable? = null

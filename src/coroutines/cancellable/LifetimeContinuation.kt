@@ -3,6 +3,8 @@ package coroutines.cancellable
 import coroutines.context.CoroutineContext
 import coroutines.context.CoroutineContinuation
 import coroutines.context.suspendCoroutineOrReturn
+import kotlinx.coroutines.experimental.LifetimeSupport
+import kotlinx.coroutines.experimental.Lifetime
 import kotlin.coroutines.CoroutineIntrinsics.SUSPENDED
 
 // --------------- cancellable continuations ---------------
@@ -14,11 +16,11 @@ import kotlin.coroutines.CoroutineIntrinsics.SUSPENDED
  * this continuation resumes with [CancellationException]. If the cancel reason was not a cancellation exception,
  * the original exception is added as cause of the [CancellationException] that this continuation resumes with.
  */
-public interface CancellableContinuation<in T> : CoroutineContinuation<T>, Cancellable
+public interface LifetimeContinuation<in T> : CoroutineContinuation<T>, Lifetime
 
-public inline suspend fun <T> suspendCancellableCoroutine(crossinline block: (CancellableContinuation<T>) -> Unit): T =
+public inline suspend fun <T> suspendCancellableCoroutine(crossinline block: (LifetimeContinuation<T>) -> Unit): T =
     suspendCoroutineOrReturn { c ->
-        val safe = SafeCancellableContinuation(c)
+        val safe = SafeLifetimeContinuation(c)
         block(safe)
         safe.getResult()
     }
@@ -26,9 +28,9 @@ public inline suspend fun <T> suspendCancellableCoroutine(crossinline block: (Ca
 // --------------- implementation details ---------------
 
 @PublishedApi
-internal class SafeCancellableContinuation<in T>(
+internal class SafeLifetimeContinuation<in T>(
         private val delegate: CoroutineContinuation<T>
-) : CancellationScope(delegate.context[Cancellable]), CancellableContinuation<T> {
+) : LifetimeSupport(delegate.context[Lifetime]), LifetimeContinuation<T> {
     override val context: CoroutineContext = delegate.context + this
 
     // only updated from the thread that invoked suspendCancellableCoroutine

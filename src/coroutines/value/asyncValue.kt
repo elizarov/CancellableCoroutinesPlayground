@@ -1,8 +1,8 @@
 package coroutines.value
 
-import coroutines.cancellable.Cancellable
+import kotlinx.coroutines.experimental.Lifetime
 import coroutines.cancellable.CancellationException
-import coroutines.cancellable.CancellationScope
+import kotlinx.coroutines.experimental.LifetimeSupport
 import coroutines.cancellable.suspendCancellableCoroutine
 import coroutines.context.CoroutineContext
 import coroutines.context.CoroutineContinuation
@@ -17,13 +17,13 @@ public fun <T> asyncValue(context: CoroutineContext = EmptyCoroutineContext, blo
     return impl
 }
 
-public interface AsyncValue<out T> : Cancellable {
+public interface AsyncValue<out T> : Lifetime {
     public suspend fun getValue(): T
 }
 
 private class AsyncValueImpl<T>(
     outerContext: CoroutineContext
-) : CancellationScope(outerContext[Cancellable]), AsyncValue<T>, CoroutineContinuation<T> {
+) : LifetimeSupport(outerContext[Lifetime]), AsyncValue<T>, CoroutineContinuation<T> {
     override val context: CoroutineContext = outerContext + this
 
     override fun resume(value: T) {
@@ -63,7 +63,7 @@ private class AsyncValueImpl<T>(
 
     @Suppress("UNCHECKED_CAST")
     private suspend fun awaitGetValue(): T = suspendCancellableCoroutine { cont ->
-        cont.unregisterOnCancel(registerCancelHandler {
+        cont.unregisterOnCancel(onCompletion {
             val state = getState()
             check(state !is Active)
             if (state is Cancelled)

@@ -1,6 +1,8 @@
 package coroutines.util
 
 import coroutines.sequence.buildIterator
+import kotlinx.coroutines.experimental.util.LockFreeLinkedListHead
+import kotlinx.coroutines.experimental.util.LockFreeLinkedListNode
 import org.junit.Test
 import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
