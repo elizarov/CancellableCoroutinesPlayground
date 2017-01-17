@@ -1,5 +1,6 @@
-package kotlinx.coroutines.experimental
+package kotlinx.coroutines.experimental.future
 
+import kotlinx.coroutines.experimental.*
 import java.util.concurrent.CompletableFuture
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.CoroutineContext

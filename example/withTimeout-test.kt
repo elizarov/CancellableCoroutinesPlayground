@@ -1,4 +1,6 @@
 import kotlinx.coroutines.experimental.*
+import kotlinx.coroutines.experimental.future.await
+import kotlinx.coroutines.experimental.future.future
 
 fun main(args: Array<String>) {
     fun slow(s: String) = future {

@@ -1,4 +1,4 @@
-import kotlinx.coroutines.experimental.future
+import kotlinx.coroutines.experimental.future.future
 import kotlinx.coroutines.experimental.delay
 
 fun main(args: Array<String>) {

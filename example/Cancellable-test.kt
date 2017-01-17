@@ -1,6 +1,6 @@
 import kotlinx.coroutines.experimental.LifetimeSupport
 import kotlinx.coroutines.experimental.Try
-import kotlinx.coroutines.experimental.future
+import kotlinx.coroutines.experimental.future.future
 import kotlinx.coroutines.experimental.delay
 import java.util.concurrent.CancellationException
 
