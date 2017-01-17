@@ -8,8 +8,10 @@ import javafx.event.ActionEvent
 import javafx.event.EventHandler
 import javafx.util.Duration
 import kotlinx.coroutines.experimental.*
+import kotlinx.coroutines.experimental.spi.DefaultCoroutineContextProvider
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.CoroutineContext
 
 
 /**
@@ -53,4 +55,9 @@ private class PulseTimer : AnimationTimer() {
     fun onNext(cont: CancellableContinuation<Long>) {
         next += cont
     }
+}
+
+public class JavaFxContextProvider : DefaultCoroutineContextProvider {
+    override fun getDefaultCoroutineContext(currentThread: Thread): CoroutineContext? =
+        if (Platform.isFxApplicationThread()) JavaFx else null
 }

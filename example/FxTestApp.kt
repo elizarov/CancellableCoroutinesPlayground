@@ -7,6 +7,7 @@ import javafx.scene.layout.Pane
 import javafx.scene.paint.Color
 import javafx.scene.shape.Rectangle
 import javafx.stage.Stage
+import kotlinx.coroutines.experimental.delay
 
 fun main(args: Array<String>) {
     Application.launch(FxTestApp::class.java, *args)
@@ -29,14 +30,19 @@ class FxTestApp : Application() {
         primaryStage.show()
     }
 
+    var rectIndex = 0
+
     fun startRect() {
         val rect = Rectangle(20.0, 20.0).apply {
             fill = Color.RED
         }
         root.children += rect
+        val index = rectIndex++
         runSuspending {
+            log("Started new coroutine #$index")
             var vx = 5
             var vy = 5
+            var counter = 0
             while (true) {
                 JavaFx.awaitPulse()
                 rect.x += vx
@@ -50,6 +56,14 @@ class FxTestApp : Application() {
                 if (rect.y !in yRange) {
                     rect.y = rect.y.coerceIn(yRange)
                     vy = -vy
+                }
+                if (counter++ > 100) {
+                    counter = 0
+                    delay(1000) // pause a bit
+                    log("Delayed #$index for a while, resume and turn")
+                    val t = vx
+                    vx = vy
+                    vy = -t
                 }
             }
         }
