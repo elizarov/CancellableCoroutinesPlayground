@@ -12,18 +12,18 @@ import kotlin.coroutines.CoroutineContext
  * Creates new coroutine execution context with the a single thread and built-in [delay] support.
  * All continuations are dispatched immediately when invoked inside the thread of this context.
  * Resources of this pool (its thread) are reclaimed when lifetime of this context is cancelled.
- * An optional parent lifetime may be specified upon creation.
+ * The specified [name] defines the name of the new thread.
+ * An optional [parent] lifetime may be specified upon creation.
  */
-fun newSingleThreadContext(name: String, parent: Lifetime? = null): CoroutineContext {
-    val lifetime = Lifetime(parent)
-    return lifetime + ThreadPoolDispatcher(1, name, lifetime)
-}
+fun newSingleThreadContext(name: String, parent: Lifetime? = null): CoroutineContext =
+    newFixedThreadPoolContext(1, name, parent)
 
 /**
- * Creates new coroutine execution context with the fixed-size thread-pool *-and built-in [delay] support.
+ * Creates new coroutine execution context with the fixed-size thread-pool and built-in [delay] support.
  * All continuations are dispatched immediately when invoked inside the threads of this context.
  * Resources of this pool (its threads) are reclaimed when lifetime of this context is cancelled.
- * An optional parent lifetime may be specified upon creation.
+ * The specified [name] defines the names of the threads.
+ * An optional [parent] lifetime may be specified upon creation.
  */
 fun newFixedThreadPoolContext(nThreads: Int, name: String, parent: Lifetime? = null): CoroutineContext {
     require(nThreads >= 1) { "Expected at least one thread, but $nThreads specified" }
