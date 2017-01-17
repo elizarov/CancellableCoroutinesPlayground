@@ -24,7 +24,7 @@ public interface SuspendingValue<out T> : Lifetime {
  * of the parent coroutine (if any).
  */
 public fun <T> suspendingValue(context: CoroutineContext = EmptyCoroutineContext, block: suspend () -> T) : SuspendingValue<T> =
-    SuspendingValueCoroutine<T>(currentCoroutineContext(context)).also { block.startCoroutine(it) }
+    SuspendingValueCoroutine<T>(newCoroutineContext(context)).also { block.startCoroutine(it) }
 
 private class SuspendingValueCoroutine<T>(
         parentContext: CoroutineContext

@@ -2,17 +2,28 @@ package kotlinx.coroutines.experimental
 
 import kotlinx.coroutines.experimental.spi.DefaultCoroutineContextProvider
 import java.util.*
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.*
+
+private const val DEBUG_PROPERTY_NAME = "kotlinx.coroutines.debug"
+private val DEBUG = CoroutineId::class.java.desiredAssertionStatus() || System.getProperty(DEBUG_PROPERTY_NAME) != null
+private val COROUTINE_ID = AtomicLong()
 
 @PublishedApi
 internal val CURRENT_CONTEXT = ThreadLocal<CoroutineContext>()
 
 /**
- * Returns context of the current coroutine or default context of this thread with user-specified overrides
- * from [context] parameters. This function shall be used to start new coroutines.
+ * Creates context for the new coroutine with user-specified overrides from [context] parameter.
+ * This function shall be used to start new coroutines.
+ *
+ * **Debugging facilities:** When assertions are enabled or when "kotlinx.coroutines.debug" system property
+ * is set, every coroutine is assigned a unique consecutive identifier. Every thread that executes
+ * a coroutine has its name modified to include the identifier of the currently currently coroutine.
  */
-public fun currentCoroutineContext(context: CoroutineContext = EmptyCoroutineContext): CoroutineContext =
-    merge(CURRENT_CONTEXT.get() ?: loadCurrentContext(), context)
+public fun newCoroutineContext(context: CoroutineContext = EmptyCoroutineContext): CoroutineContext =
+    merge(CURRENT_CONTEXT.get() ?: loadCurrentContext(), context).let {
+        if (DEBUG) it + CoroutineId(COROUTINE_ID.incrementAndGet()) else it
+    }
 
 /**
  * Executes a block using a given default coroutine context.
@@ -20,12 +31,12 @@ public fun currentCoroutineContext(context: CoroutineContext = EmptyCoroutineCon
  * The specified [context] is merged onto the current coroutine context (if any).
  */
 public inline fun <T> withDefaultCoroutineContext(context: CoroutineContext, block: () -> T): T {
-    val old = CURRENT_CONTEXT.get()
-    CURRENT_CONTEXT.set(merge(old, context))
+    val oldContext = CURRENT_CONTEXT.get()
+    val oldName = updateContext(oldContext, context)
     try {
         return block()
     } finally {
-        CURRENT_CONTEXT.set(old)
+        restoreContext(oldContext, oldName)
     }
 }
 
@@ -64,15 +75,49 @@ internal fun merge(current: CoroutineContext?, context: CoroutineContext) =
     }
 
 private fun normalizeContext(context: CoroutineContext): CoroutineContext {
-    val interceptor = context[ContinuationInterceptor]
-    if (interceptor == null) return context + DefaultContext // use default context interceptor by default
+    val interceptor = context[ContinuationInterceptor] ?: return context + DefaultContext
+    // use default context interceptor by default
     check(interceptor is CoroutineDispatcher) {
         "Continuation interceptor must extend CoroutineDispatcher to be used here, but ${interceptor::class} was found"
     }
     return context
 }
 
+@PublishedApi
+internal fun updateContext(oldContext: CoroutineContext?, context: CoroutineContext): String? {
+    if (context === oldContext) return null
+    val newContext = merge(oldContext, context)
+    CURRENT_CONTEXT.set(newContext)
+    if (!DEBUG) return null
+    if (newContext === oldContext) return null
+    val new = newContext[CoroutineId] ?: return null
+    val old = oldContext?.get(CoroutineId)
+    if (new === old) return null
+    val currentThread = Thread.currentThread()
+    val oldName = currentThread.name
+    val coroutineName = newContext[CoroutineName]?.name ?: "coroutine"
+    currentThread.name = buildString(oldName.length + coroutineName.length + 10) {
+        append(oldName)
+        append(" @")
+        append(coroutineName)
+        append('#')
+        append(new.id)
+    }
+    return oldName
+}
+
+@PublishedApi
+internal fun restoreContext(oldContext: CoroutineContext?, oldName: String?) {
+    if (oldName != null) Thread.currentThread().name = oldName
+    CURRENT_CONTEXT.set(oldContext)
+}
+
 private object DefaultContext : CoroutineDispatcher() {
     override fun isDispatchNeeded(): Boolean = false
     override fun dispatch(block: Runnable) { throw UnsupportedOperationException() }
+}
+
+private class CoroutineId(val id: Long) : AbstractCoroutineContextElement(CoroutineId) {
+    companion object Key : CoroutineContext.Key<CoroutineId>
+    override fun toString(): String = "CoroutineId($id)"
 }

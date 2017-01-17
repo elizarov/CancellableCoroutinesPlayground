@@ -37,7 +37,7 @@ class FxTestApp : Application() {
             fill = Color.RED
         }
         root.children += rect
-        val index = rectIndex++
+        val index = ++rectIndex
         runSuspending {
             log("Started new coroutine #$index")
             var vx = 5

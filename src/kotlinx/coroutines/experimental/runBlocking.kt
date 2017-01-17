@@ -13,11 +13,8 @@ import kotlin.coroutines.startCoroutine
  * inside which this function is invoked. The lifetime of the resulting coroutine is subordinate to the lifetime
  * of the parent coroutine (if any).
  */
-public fun <T> runBlocking(context: CoroutineContext = EmptyCoroutineContext, block: suspend () -> T): T {
-    val blocking = BlockingCoroutine<T>(currentCoroutineContext(context))
-    block.startCoroutine(blocking)
-    return blocking.awaitBlocking()
-}
+public fun <T> runBlocking(context: CoroutineContext = EmptyCoroutineContext, block: suspend () -> T): T =
+    BlockingCoroutine<T>(newCoroutineContext(context)).also { block.startCoroutine(it) }.awaitBlocking()
 
 private class BlockingCoroutine<T>(parentContext: CoroutineContext) : LifetimeContinuation<T>(parentContext) {
     val blockedThread: Thread = Thread.currentThread()

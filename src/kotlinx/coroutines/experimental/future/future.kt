@@ -15,9 +15,9 @@ import kotlin.coroutines.startCoroutine
  * of the parent coroutine (if any).
  */
 public fun <T> future(context: CoroutineContext = EmptyCoroutineContext, block: suspend () -> T): CompletableFuture<T> {
-    val ctx = currentCoroutineContext(context)
-    val lifetime = Lifetime(ctx[Lifetime])
-    val future = CompletableFutureCoroutine<T>(ctx + lifetime)
+    val newContext = newCoroutineContext(context)
+    val lifetime = Lifetime(newContext[Lifetime])
+    val future = CompletableFutureCoroutine<T>(newContext + lifetime)
     future.whenComplete { _, exception -> lifetime.cancel(exception) }
     block.startCoroutine(future)
     return future

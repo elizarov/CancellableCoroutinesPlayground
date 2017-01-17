@@ -14,7 +14,7 @@ import kotlin.coroutines.startCoroutine
  * of the parent coroutine (if any).
  */
 fun runSuspending(context: CoroutineContext = EmptyCoroutineContext, block: suspend () -> Unit) {
-    block.startCoroutine(StandaloneCoroutine(currentCoroutineContext(context)))
+    block.startCoroutine(StandaloneCoroutine(newCoroutineContext(context)))
 }
 
 private class StandaloneCoroutine(

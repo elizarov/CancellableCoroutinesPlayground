@@ -5,7 +5,7 @@ import kotlin.coroutines.Continuation
 import kotlin.coroutines.ContinuationInterceptor
 
 /**
- * Base class that shall be extended by all coroutine thread dispatchers so that that [currentCoroutineContext] is
+ * Base class that shall be extended by all coroutine thread dispatchers so that that [newCoroutineContext] is
  * correctly transferred to a new thread.
  */
 public abstract class CoroutineDispatcher :
@@ -35,7 +35,10 @@ private class DispatchedContinuation<T>(
                     continuation.resume(value)
                 }
             })
-        else continuation.resume(value)
+        else
+            withDefaultCoroutineContext(continuation.context) {
+                continuation.resume(value)
+            }
     }
 
     override fun resumeWithException(exception: Throwable) {
@@ -45,6 +48,9 @@ private class DispatchedContinuation<T>(
                     continuation.resumeWithException(exception)
                 }
             })
-        else continuation.resumeWithException(exception)
+        else
+            withDefaultCoroutineContext(continuation.context) {
+                continuation.resumeWithException(exception)
+            }
     }
 }
