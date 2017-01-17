@@ -16,12 +16,13 @@ public fun currentCoroutineContext(context: CoroutineContext = EmptyCoroutineCon
     merge(CURRENT_CONTEXT.get() ?: loadCurrentContext(), context)
 
 /**
- * Executes a block setting a given default coroutine context.
- * It affects all new coroutines that are started withing the block.
+ * Executes a block using a given default coroutine context.
+ * This context affects all new coroutines that are started withing the block.
+ * The specified [context] is merged onto the current coroutine context (if any).
  */
 public fun <T> withDefaultCoroutineContext(context: CoroutineContext, block: () -> T): T {
     val old = CURRENT_CONTEXT.get()
-    CURRENT_CONTEXT.set(normalizeContext(context))
+    CURRENT_CONTEXT.set(if (old == null) normalizeContext(context) else merge(old, context))
     try {
         return block()
     } finally {
@@ -33,11 +34,12 @@ public fun <T> withDefaultCoroutineContext(context: CoroutineContext, block: () 
  * Executes a suspending block with a given coroutine context.
  * It immediately application dispatcher of the new context, shifting execution of the block into the
  * different thread inside the block, and back when it completes.
+ * The specified [context] is merged onto the current coroutine context.
  */
 public suspend fun <T> withCoroutineContext(context: CoroutineContext, block: suspend () -> T): T =
     suspendCoroutine { cont ->
         block.startCoroutine(object : Continuation<T> by cont {
-            override val context: CoroutineContext = cont.context + context
+            override val context: CoroutineContext = merge(cont.context, context)
         })
     }
 
