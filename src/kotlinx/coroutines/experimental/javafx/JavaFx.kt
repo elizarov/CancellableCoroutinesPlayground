@@ -15,7 +15,7 @@ import kotlin.coroutines.CoroutineContext
 
 
 /**
- * Dispatches execution onto Swing event dispatch thread.
+ * Dispatches execution onto JavaFx application thread and provides native [delay] support.
  */
 object JavaFx : CoroutineDispatcher(), Delay {
     private val pulseTimer by lazy {

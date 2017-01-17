@@ -11,7 +11,7 @@ import javax.swing.Timer
 import kotlin.coroutines.CoroutineContext
 
 /**
- * Dispatches execution onto Swing event dispatching thread.
+ * Dispatches execution onto Swing event dispatching thread and provides native [delay] support.
  */
 object Swing : CoroutineDispatcher(), Delay {
     override fun isDispatchNeeded(): Boolean = !SwingUtilities.isEventDispatchThread()
