@@ -11,7 +11,7 @@ import kotlin.coroutines.suspendCoroutine
 /**
  * Cancellable continuation. Its life-time is completed when it is resumed or cancelled.
  * When [cancel] function is explicitly invoked, this continuation resumes with [CancellationException].
- * If the cancel cancelReason was not a cancellation exception, the original exception is added as cause of the
+ * If the cancel reason was not a cancellation exception, the original exception is added as cause of the
  * [CancellationException] that this continuation resumes with.
  */
 public interface CancellableContinuation<in T> : Continuation<T>, Lifetime
