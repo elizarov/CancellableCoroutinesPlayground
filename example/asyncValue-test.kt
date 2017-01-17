@@ -18,7 +18,9 @@ fun main(args: Array<String>) = runBlocking(CommonPool) {
     }
     log("Created ${va.size} values")
     withTimeout(1100L) {
-        for (v in va)
-            log("Got value: ${v.getValue()}")
+        withCoroutineContext(newSingleThreadContext("ReceiverThread")) {
+            for (v in va)
+                log("Got value: ${v.getValue()}")
+        }
     }
 }
