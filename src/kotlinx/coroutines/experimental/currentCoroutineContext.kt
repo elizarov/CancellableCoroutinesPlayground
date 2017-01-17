@@ -3,7 +3,6 @@ package kotlinx.coroutines.experimental
 import kotlinx.coroutines.experimental.spi.DefaultCoroutineContextProvider
 import java.util.*
 import kotlin.coroutines.*
-import kotlin.coroutines.intrinsics.suspendCoroutineOrReturn
 
 @PublishedApi
 internal val CURRENT_CONTEXT = ThreadLocal<CoroutineContext>()
@@ -20,9 +19,9 @@ public fun currentCoroutineContext(context: CoroutineContext = EmptyCoroutineCon
  * This context affects all new coroutines that are started withing the block.
  * The specified [context] is merged onto the current coroutine context (if any).
  */
-public fun <T> withDefaultCoroutineContext(context: CoroutineContext, block: () -> T): T {
+public inline fun <T> withDefaultCoroutineContext(context: CoroutineContext, block: () -> T): T {
     val old = CURRENT_CONTEXT.get()
-    CURRENT_CONTEXT.set(if (old == null) normalizeContext(context) else merge(old, context))
+    CURRENT_CONTEXT.set(merge(old, context))
     try {
         return block()
     } finally {
@@ -58,8 +57,11 @@ private fun loadCurrentContext(): CoroutineContext {
     return result
 }
 
-private fun merge(current: CoroutineContext, context: CoroutineContext) =
-    if (context == EmptyCoroutineContext) current else normalizeContext(current + context)
+@PublishedApi
+internal fun merge(current: CoroutineContext?, context: CoroutineContext) =
+    (current ?: DefaultContext).let { cc ->
+        if (context == EmptyCoroutineContext) cc else normalizeContext(cc + context)
+    }
 
 private fun normalizeContext(context: CoroutineContext): CoroutineContext {
     val interceptor = context[ContinuationInterceptor]
