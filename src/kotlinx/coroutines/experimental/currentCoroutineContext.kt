@@ -2,9 +2,8 @@ package kotlinx.coroutines.experimental
 
 import kotlinx.coroutines.experimental.spi.DefaultCoroutineContextProvider
 import java.util.*
-import kotlin.coroutines.ContinuationInterceptor
-import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.*
+import kotlin.coroutines.intrinsics.suspendCoroutineOrReturn
 
 @PublishedApi
 internal val CURRENT_CONTEXT = ThreadLocal<CoroutineContext>()
@@ -17,9 +16,10 @@ public fun currentCoroutineContext(context: CoroutineContext = EmptyCoroutineCon
     merge(CURRENT_CONTEXT.get() ?: loadCurrentContext(), context)
 
 /**
- * Executes a block with a given coroutine context.
+ * Executes a block setting a given default coroutine context.
+ * It affects all new coroutines that are started withing the block.
  */
-public inline fun <T> withCoroutineContext(context: CoroutineContext, block: () -> T): T {
+public fun <T> withDefaultCoroutineContext(context: CoroutineContext, block: () -> T): T {
     val old = CURRENT_CONTEXT.get()
     CURRENT_CONTEXT.set(normalizeContext(context))
     try {
@@ -28,6 +28,18 @@ public inline fun <T> withCoroutineContext(context: CoroutineContext, block: () 
         CURRENT_CONTEXT.set(old)
     }
 }
+
+/**
+ * Executes a suspending block with a given coroutine context.
+ * It immediately application dispatcher of the new context, shifting execution of the block into the
+ * different thread inside the block, and back when it completes.
+ */
+public suspend fun <T> withCoroutineContext(context: CoroutineContext, block: suspend () -> T): T =
+    suspendCoroutine { cont ->
+        block.startCoroutine(object : Continuation<T> by cont {
+            override val context: CoroutineContext = cont.context + context
+        })
+    }
 
 private fun loadCurrentContext(): CoroutineContext {
     var result: CoroutineContext? = null
@@ -47,8 +59,7 @@ private fun loadCurrentContext(): CoroutineContext {
 private fun merge(current: CoroutineContext, context: CoroutineContext) =
     if (context == EmptyCoroutineContext) current else normalizeContext(current + context)
 
-@PublishedApi
-internal fun normalizeContext(context: CoroutineContext): CoroutineContext {
+private fun normalizeContext(context: CoroutineContext): CoroutineContext {
     val interceptor = context[ContinuationInterceptor]
     if (interceptor == null) return context + DefaultContext // use default context interceptor by default
     check(interceptor is CoroutineDispatcher) {

@@ -31,7 +31,7 @@ private class DispatchedContinuation<T>(
     override fun resume(value: T) {
         if (dispatcher.isDispatchNeeded())
             dispatcher.dispatch(Runnable {
-                withCoroutineContext(continuation.context) {
+                withDefaultCoroutineContext(continuation.context) {
                     continuation.resume(value)
                 }
             })
@@ -41,7 +41,7 @@ private class DispatchedContinuation<T>(
     override fun resumeWithException(exception: Throwable) {
         if (dispatcher.isDispatchNeeded())
             dispatcher.dispatch(Runnable {
-                withCoroutineContext(continuation.context) {
+                withDefaultCoroutineContext(continuation.context) {
                     continuation.resumeWithException(exception)
                 }
             })
