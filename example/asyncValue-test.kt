@@ -1,11 +1,7 @@
-import kotlinx.coroutines.experimental.runBlocking
-import kotlinx.coroutines.experimental.delay
-import kotlinx.coroutines.experimental.withTimeout
+import kotlinx.coroutines.experimental.*
 import kotlinx.coroutines.experimental.swing.Swing
-import kotlinx.coroutines.experimental.SuspendingValue
-import kotlinx.coroutines.experimental.suspendingValue
 
-fun main(args: Array<String>) = runBlocking(Swing) {
+fun main(args: Array<String>) = runBlocking(newSingleThreadContext("ValueThread")) {
     val va = Array<SuspendingValue<String>>(10) { i ->
         suspendingValue {
             val sleepTime = i * 200L
