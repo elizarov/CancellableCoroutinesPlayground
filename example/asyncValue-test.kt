@@ -2,6 +2,8 @@ import kotlinx.coroutines.experimental.*
 import kotlinx.coroutines.experimental.future.CommonPool
 import kotlinx.coroutines.experimental.swing.Swing
 
+val receiverThread = newSingleThreadContext("ReceiverThread")
+
 fun main(args: Array<String>) = runBlocking(CommonPool) {
     val va = Array<SuspendingValue<String>>(10) { i ->
         suspendingValue {
@@ -17,10 +19,14 @@ fun main(args: Array<String>) = runBlocking(CommonPool) {
         }
     }
     log("Created ${va.size} values")
-    withTimeout(1100L) {
-        withCoroutineContext(newSingleThreadContext("ReceiverThread")) {
-            for (v in va)
-                log("Got value: ${v.getValue()}")
+    try {
+        withTimeout(1100L) {
+            withCoroutineContext(receiverThread) {
+                for (v in va)
+                    log("Got value: ${v.getValue()}")
+            }
         }
+    } finally {
+        log("The receiver thread is still active = ${receiverThread[Lifetime]!!.isActive}")
     }
 }
