@@ -1,7 +1,8 @@
 import kotlinx.coroutines.experimental.*
+import kotlinx.coroutines.experimental.future.CommonPool
 import kotlinx.coroutines.experimental.swing.Swing
 
-fun main(args: Array<String>) = runBlocking(newSingleThreadContext("ValueThread")) {
+fun main(args: Array<String>) = runBlocking(CommonPool) {
     val va = Array<SuspendingValue<String>>(10) { i ->
         suspendingValue {
             val sleepTime = i * 200L
