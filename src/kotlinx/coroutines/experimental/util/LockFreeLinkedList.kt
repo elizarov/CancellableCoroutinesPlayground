@@ -14,7 +14,7 @@ private typealias Node = LockFreeLinkedListNode
  * Sentinel node should be never removed.
  */
 @Suppress("LeakingThis")
-internal open class LockFreeLinkedListNode {
+public open class LockFreeLinkedListNode {
     @Volatile
     private var _next: Any = this // DoubleLinkedNode | Removed | CondAdd
     @Volatile
@@ -241,7 +241,7 @@ internal open class LockFreeLinkedListNode {
     }
 }
 
-internal open class LockFreeLinkedListHead : LockFreeLinkedListNode() {
+public open class LockFreeLinkedListHead : LockFreeLinkedListNode() {
     /**
      * Iterates over all elements in this list of a specified type.
      */
