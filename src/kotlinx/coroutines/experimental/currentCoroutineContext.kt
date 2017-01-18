@@ -1,9 +1,10 @@
 package kotlinx.coroutines.experimental
 
-import kotlinx.coroutines.experimental.spi.DefaultCoroutineContextProvider
-import java.util.*
 import java.util.concurrent.atomic.AtomicLong
-import kotlin.coroutines.*
+import kotlin.coroutines.AbstractCoroutineContextElement
+import kotlin.coroutines.ContinuationInterceptor
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 
 private const val DEBUG_PROPERTY_NAME = "kotlinx.coroutines.debug"
 private val DEBUG = CoroutineId::class.java.desiredAssertionStatus() || System.getProperty(DEBUG_PROPERTY_NAME) != null
@@ -13,7 +14,18 @@ private val COROUTINE_ID = AtomicLong()
 internal val CURRENT_CONTEXT = ThreadLocal<CoroutineContext>()
 
 /**
+ * A coroutine dispatcher that executes initial continuation of the coroutine _right here_ in the current call-frame
+ * and let the coroutine resume in whatever thread that is used by the corresponding suspending function, without
+ * mandating any specific threading policy.
+ */
+public object Here : CoroutineDispatcher() {
+    override fun isDispatchNeeded(): Boolean = false
+    override fun dispatch(block: Runnable) { throw UnsupportedOperationException() }
+}
+
+/**
  * Creates context for the new coroutine with user-specified overrides from [context] parameter.
+ * The [context] for the new coroutine must be explicitly specified and must include [CoroutineDispatcher] element.
  * This function shall be used to start new coroutines.
  *
  * **Debugging facilities:** When assertions are enabled or when "kotlinx.coroutines.debug" system property
@@ -27,17 +39,19 @@ internal val CURRENT_CONTEXT = ThreadLocal<CoroutineContext>()
  * Coroutine name can be explicitly assigned using [CoroutineName] context element.
  * The string "coroutine" is used as a default name.
  */
-public fun newCoroutineContext(context: CoroutineContext = EmptyCoroutineContext): CoroutineContext =
-    merge(CURRENT_CONTEXT.get() ?: loadCurrentContext(), context).let {
+public fun newCoroutineContext(context: CoroutineContext): CoroutineContext {
+    validateContext(context)
+    return ((CURRENT_CONTEXT.get() ?: EmptyCoroutineContext) + context).let {
         if (DEBUG) it + CoroutineId(COROUTINE_ID.incrementAndGet()) else it
     }
+}
 
 /**
  * Executes a block using a given default coroutine context.
  * This context affects all new coroutines that are started withing the block.
  * The specified [context] is merged onto the current coroutine context (if any).
  */
-public inline fun <T> withDefaultCoroutineContext(context: CoroutineContext, block: () -> T): T {
+internal inline fun <T> withDefaultCoroutineContext(context: CoroutineContext, block: () -> T): T {
     val oldContext = CURRENT_CONTEXT.get()
     val oldName = updateContext(oldContext, context)
     try {
@@ -47,59 +61,20 @@ public inline fun <T> withDefaultCoroutineContext(context: CoroutineContext, blo
     }
 }
 
-/**
- * Executes a suspending block with a given coroutine context.
- * It immediately application dispatcher of the new context, shifting execution of the block into the
- * different thread inside the block, and back when it completes.
- * The specified [context] is merged onto the current coroutine context.
- */
-public suspend fun <T> withCoroutineContext(context: CoroutineContext, block: suspend () -> T): T =
-    suspendCoroutine { cont ->
-        block.startCoroutine(object : Continuation<T> by cont {
-            override val context: CoroutineContext = merge(cont.context, context)
-        })
+private fun validateContext(context: CoroutineContext) {
+    check(context[ContinuationInterceptor] is CoroutineDispatcher) {
+        "Context of new coroutine must include CoroutineDispatcher"
     }
-
-private fun loadCurrentContext(): CoroutineContext {
-    var result: CoroutineContext? = null
-    val currentThread = Thread.currentThread()
-    for (provider in ServiceLoader.load(DefaultCoroutineContextProvider::class.java)) {
-        result = provider.getDefaultCoroutineContext(currentThread)
-        if (result != null) {
-            result = normalizeContext(result)
-            break
-        }
-    }
-    if (result == null) result = DefaultContext
-    CURRENT_CONTEXT.set(result)
-    return result
 }
 
 @PublishedApi
-internal fun merge(current: CoroutineContext?, context: CoroutineContext) =
-    (current ?: DefaultContext).let { cc ->
-        if (context == EmptyCoroutineContext) cc else normalizeContext(cc + context)
-    }
-
-private fun normalizeContext(context: CoroutineContext): CoroutineContext {
-    val interceptor = context[ContinuationInterceptor] ?: return context + DefaultContext
-    // use default context interceptor by default
-    check(interceptor is CoroutineDispatcher) {
-        "Continuation interceptor must extend CoroutineDispatcher to be used here, but ${interceptor::class} was found"
-    }
-    return context
-}
-
-@PublishedApi
-internal fun updateContext(oldContext: CoroutineContext?, context: CoroutineContext): String? {
-    if (context === oldContext) return null
-    val newContext = merge(oldContext, context)
+internal fun updateContext(oldContext: CoroutineContext?, newContext: CoroutineContext): String? {
+    if (newContext === oldContext) return null
     CURRENT_CONTEXT.set(newContext)
     if (!DEBUG) return null
-    if (newContext === oldContext) return null
-    val new = newContext[CoroutineId] ?: return null
-    val old = oldContext?.get(CoroutineId)
-    if (new === old) return null
+    val newId = newContext[CoroutineId] ?: return null
+    val oldId = oldContext?.get(CoroutineId)
+    if (newId === oldId) return null
     val currentThread = Thread.currentThread()
     val oldName = currentThread.name
     val coroutineName = newContext[CoroutineName]?.name ?: "coroutine"
@@ -108,7 +83,7 @@ internal fun updateContext(oldContext: CoroutineContext?, context: CoroutineCont
         append(" @")
         append(coroutineName)
         append('#')
-        append(new.id)
+        append(newId.id)
     }
     return oldName
 }
@@ -117,11 +92,6 @@ internal fun updateContext(oldContext: CoroutineContext?, context: CoroutineCont
 internal fun restoreContext(oldContext: CoroutineContext?, oldName: String?) {
     if (oldName != null) Thread.currentThread().name = oldName
     CURRENT_CONTEXT.set(oldContext)
-}
-
-private object DefaultContext : CoroutineDispatcher() {
-    override fun isDispatchNeeded(): Boolean = false
-    override fun dispatch(block: Runnable) { throw UnsupportedOperationException() }
 }
 
 private class CoroutineId(val id: Long) : AbstractCoroutineContextElement(CoroutineId) {

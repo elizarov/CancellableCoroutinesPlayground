@@ -4,57 +4,57 @@ import kotlinx.coroutines.experimental.*
 import java.util.concurrent.CompletableFuture
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.startCoroutine
 
 /**
- * Starts coroutine in the current coroutine context and returns its results an an implementation of [CompletableFuture].
- * If is already in the appropriate thread of the context (like in UI thread or in the appropriate thread pool),
- * then the [block] is executed _in this thread_ until its first suspension point.
+ * Starts new coroutine and returns its results an an implementation of [CompletableFuture].
+ * This coroutine builder uses [CommonPool] context by default and is conceptually similar to [CompletableFuture.supplyAsync].
  *
- * The running coroutine is cancelled when the resulting future is cancelled.
- * The [context] that is optionally specified as parameter is added to the context of the parent running coroutine (if any)
- * inside which this function is invoked. The lifetime of the resulting coroutine is subordinate to the lifetime
- * of the parent coroutine (if any).
+ * The running coroutine is cancelled when the resulting future is cancelled or otherwise completed
+ * The [context] for the new coroutine must include [CoroutineDispatcher] element.
+ * The specified context is added to the context of the parent running coroutine (if any) inside which this function
+ * is invoked. The [Job] of the resulting coroutine is a child of the job of the parent coroutine (if any).
+ *
+ * See [newCoroutineContext] for a description of debugging facilities that are available for newly created coroutine.
  */
-public fun <T> future(context: CoroutineContext = EmptyCoroutineContext, block: suspend () -> T): CompletableFuture<T> {
-    val newContext = newCoroutineContext(context)
-    val lifetime = Lifetime(newContext[Lifetime])
-    val future = CompletableFutureCoroutine<T>(newContext + lifetime)
-    future.whenComplete { _, exception -> lifetime.cancel(exception) }
+public fun <T> future(context: CoroutineContext = CommonPool, block: suspend () -> T): CompletableFuture<T> {
+    val newContext = newCoroutineContext(CommonPool + context)
+    val job = Job(newContext[Job])
+    val future = CompletableFutureCoroutine<T>(newContext + job)
+    job.cancelFutureOnCompletion(future)
+    future.whenComplete { _, exception -> job.cancel(exception) }
     block.startCoroutine(future)
     return future
 }
 
 /**
- * Starts coroutine in the [CommonPool] context and returns its results an an implementation of [CompletableFuture].
- * The [block] is scheduled for execution in the background thread and this function immediately returns to the caller,
- * similarly to [CompletableFuture.supplyAsync], but with suspending block of code.
- *
- * The running coroutine is cancelled when the resulting future is cancelled.
- * The [context] that is optionally specified as parameter is added to the context of the parent running coroutine (if any)
- * inside which this function is invoked. The lifetime of the resulting coroutine is subordinate to the lifetime
- * of the parent coroutine (if any).
+ * Converts this deferred value to the instance of [CompletableFuture].
+ * The deferred value is cancelled when the resulting future is cancelled or otherwise completed.
  */
-public fun <T> futureAsync(block: suspend () -> T): CompletableFuture<T> = future(CommonPool, block)
+public fun <T> Deferred<T>.toCompletableFuture(): CompletableFuture<T> {
+    val future = CompletableFuture<T>()
+    future.whenComplete { _, exception -> cancel(exception) }
+    onCompletion {
+        // todo:
+    }
+    return future
+}
 
 /**
  * Awaits for completion of the future without blocking a thread. This suspending function is cancellable.
- * If the [Lifetime] of the current coroutine is completed while this suspending function is waiting, this function
+ * If the [Job] of the current coroutine is completed while this suspending function is waiting, this function
  * immediately resumes with [CancellationException] .
  */
 public suspend fun <T> CompletableFuture<T>.await(): T =
     // quick check if already complete (avoid extra object creation)
     if (isDone) get() else suspendCancellableCoroutine { cont: CancellableContinuation<T> ->
-        val g = whenComplete { result, exception ->
+        val completionFuture = whenComplete { result, exception ->
             if (exception == null) // the future has been completed normally
                 cont.resume(result)
             else // the future has completed with an exception
                 cont.resumeWithException(exception)
         }
-        // The logic this: cont.onCompletion { g.cancel(false) }
-        // Below is an optimization (one fewer object)
-        cont.onCompletion(CancelFutureOnCompletion(cont, g))
+        cont.cancelFutureOnCompletion(completionFuture)
         Unit
     }
 

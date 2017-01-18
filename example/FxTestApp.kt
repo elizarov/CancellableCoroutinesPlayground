@@ -8,10 +8,10 @@ import javafx.scene.paint.Color
 import javafx.scene.shape.Circle
 import javafx.scene.shape.Rectangle
 import javafx.stage.Stage
-import kotlinx.coroutines.experimental.Lifetime
+import kotlinx.coroutines.experimental.Job
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.javafx.JavaFx
-import kotlinx.coroutines.experimental.runSuspending
+import kotlinx.coroutines.experimental.launch
 import java.util.*
 
 fun main(args: Array<String>) {
@@ -44,15 +44,14 @@ class FxTestApp : Application() {
     }
 
     val random = Random()
-    val animations = arrayListOf<Lifetime>()
+    val animations = arrayListOf<Job>()
     var animationIndex = 0
 
-    private fun addAnimation(node: Node): Lifetime {
+    private fun animation(node: Node, block: suspend () -> Unit) {
         root.children += node
-        val lifetime = Lifetime()
-        lifetime.onCompletion { root.children -= node }
-        animations += lifetime
-        return lifetime
+        val job = launch(JavaFx, block)
+        animations += job
+        job.onCompletion { root.children -= node }
     }
 
     fun doRect() {
@@ -61,7 +60,7 @@ class FxTestApp : Application() {
         }
         val index = ++animationIndex
         val speed = 5.0
-        runSuspending(addAnimation(node)) {
+        animation(node) {
             log("Started new 'rect' coroutine #$index")
             var vx = speed
             var vy = speed
@@ -99,7 +98,7 @@ class FxTestApp : Application() {
         val index = ++animationIndex
         val acceleration = 0.1
         val maxSpeed = 5.0
-        runSuspending(addAnimation(node)) {
+        animation(node) {
             log("Started new 'circle' coroutine #$index")
             var sx = random.nextDouble() * maxSpeed
             var sy = random.nextDouble() * maxSpeed
@@ -118,7 +117,6 @@ class FxTestApp : Application() {
                 node.translateY += sy
             }
         }
-
     }
 
     fun doClear() {

@@ -5,7 +5,7 @@ import kotlin.coroutines.Continuation
 import kotlin.coroutines.ContinuationInterceptor
 
 /**
- * Base class that shall be extended by all coroutine thread dispatchers so that that [newCoroutineContext] is
+ * Base class that shall be extended by all coroutine dispatcher implementations so that that [newCoroutineContext] is
  * correctly transferred to a new thread.
  */
 public abstract class CoroutineDispatcher :

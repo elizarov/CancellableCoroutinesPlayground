@@ -1,12 +1,10 @@
 import kotlinx.coroutines.experimental.*
-import kotlinx.coroutines.experimental.future.CommonPool
-import kotlinx.coroutines.experimental.swing.Swing
 
 val receiverThread = newSingleThreadContext("ReceiverThread")
 
-fun main(args: Array<String>) = runBlocking(CommonPool) {
-    val va = Array<SuspendingValue<String>>(10) { i ->
-        suspendingValue {
+fun main(args: Array<String>) = runBlocking(Here) {
+    val va = Array<Deferred<String>>(10) { i ->
+        defer(CommonPool) {
             val sleepTime = i * 200L
             log("This value #$i will delay for $sleepTime ms before producing result")
             try {
@@ -21,12 +19,12 @@ fun main(args: Array<String>) = runBlocking(CommonPool) {
     log("Created ${va.size} values")
     try {
         withTimeout(1100L) {
-            withCoroutineContext(receiverThread) {
+            run(receiverThread) {
                 for (v in va)
-                    log("Got value: ${v.getValue()}")
+                    log("Got value: ${v.await()}")
             }
         }
     } finally {
-        log("The receiver thread is still active = ${receiverThread[Lifetime]!!.isActive}")
+        log("The receiver thread is still active = ${receiverThread[Job]!!.isActive}")
     }
 }

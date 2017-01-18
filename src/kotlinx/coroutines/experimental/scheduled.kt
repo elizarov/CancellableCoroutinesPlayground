@@ -24,7 +24,7 @@ suspend fun <T> withTimeout(time: Long, unit: TimeUnit = TimeUnit.MILLISECONDS, 
             // create an exception with a specific text
             cont.cancel(CancellationException("Timed out waiting for $time $unit"))
         }, time, unit)
-        cont.onCompletion(CancelFutureOnCompletion(cont, timeout))
+        cont.cancelFutureOnCompletion(timeout)
         // restart block in a separate coroutine using cancellable context of this continuation,
         block.startCoroutine(cont)
     }

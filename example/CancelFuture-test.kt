@@ -1,5 +1,5 @@
-import kotlinx.coroutines.experimental.future.future
 import kotlinx.coroutines.experimental.delay
+import kotlinx.coroutines.experimental.future.future
 
 fun main(args: Array<String>) {
     val f = future {
@@ -19,6 +19,6 @@ fun main(args: Array<String>) {
             log("Aborting because of $e")
         }
     }
-    Thread.sleep(1100)
+    Thread.sleep(1200)
     f.cancel(false)
 }

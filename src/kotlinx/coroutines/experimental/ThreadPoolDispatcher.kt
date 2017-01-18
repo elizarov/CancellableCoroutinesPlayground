@@ -11,23 +11,23 @@ import kotlin.coroutines.CoroutineContext
 /**
  * Creates new coroutine execution context with the a single thread and built-in [delay] support.
  * All continuations are dispatched immediately when invoked inside the thread of this context.
- * Resources of this pool (its thread) are reclaimed when lifetime of this context is cancelled.
+ * Resources of this pool (its thread) are reclaimed when job of this context is cancelled.
  * The specified [name] defines the name of the new thread.
- * An optional [parent] lifetime may be specified upon creation.
+ * An optional [parent] job may be specified upon creation.
  */
-fun newSingleThreadContext(name: String, parent: Lifetime? = null): CoroutineContext =
+fun newSingleThreadContext(name: String, parent: Job? = null): CoroutineContext =
     newFixedThreadPoolContext(1, name, parent)
 
 /**
  * Creates new coroutine execution context with the fixed-size thread-pool and built-in [delay] support.
  * All continuations are dispatched immediately when invoked inside the threads of this context.
- * Resources of this pool (its threads) are reclaimed when lifetime of this context is cancelled.
+ * Resources of this pool (its threads) are reclaimed when job of this context is cancelled.
  * The specified [name] defines the names of the threads.
- * An optional [parent] lifetime may be specified upon creation.
+ * An optional [parent] job may be specified upon creation.
  */
-fun newFixedThreadPoolContext(nThreads: Int, name: String, parent: Lifetime? = null): CoroutineContext {
+fun newFixedThreadPoolContext(nThreads: Int, name: String, parent: Job? = null): CoroutineContext {
     require(nThreads >= 1) { "Expected at least one thread, but $nThreads specified" }
-    val lifetime = Lifetime(parent)
+    val lifetime = Job(parent)
     return lifetime + ThreadPoolDispatcher(nThreads, name, lifetime)
 }
 
@@ -36,7 +36,7 @@ private val thisThreadContext = ThreadLocal<ThreadPoolDispatcher>()
 private class ThreadPoolDispatcher(
         nThreads: Int,
         name: String,
-        val lifetime: Lifetime
+        val job: Job
 ) : CoroutineDispatcher(), ContinuationInterceptor, Delay {
     val threadNo = AtomicInteger()
     val executor: ScheduledExecutorService = Executors.newScheduledThreadPool(nThreads) { target ->
@@ -48,7 +48,7 @@ private class ThreadPoolDispatcher(
     }
 
     init {
-        lifetime.onCompletion { executor.shutdown() }
+        job.onCompletion { executor.shutdown() }
     }
 
     override fun isDispatchNeeded(): Boolean = thisThreadContext.get() != this
@@ -57,6 +57,6 @@ private class ThreadPoolDispatcher(
 
     override fun resumeAfterDelay(time: Long, unit: TimeUnit, continuation: CancellableContinuation<Unit>) {
         val timeout = executor.schedule({ continuation.resume(Unit) }, time, unit)
-        continuation.onCompletion(CancelFutureOnCompletion(continuation, timeout))
+        continuation.cancelFutureOnCompletion(timeout)
     }
 }

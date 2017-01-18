@@ -3,12 +3,11 @@ package kotlinx.coroutines.experimental.swing
 import kotlinx.coroutines.experimental.CancellableContinuation
 import kotlinx.coroutines.experimental.CoroutineDispatcher
 import kotlinx.coroutines.experimental.Delay
-import kotlinx.coroutines.experimental.spi.DefaultCoroutineContextProvider
+import kotlinx.coroutines.experimental.swing.Swing.delay
 import java.awt.event.ActionListener
 import java.util.concurrent.TimeUnit
 import javax.swing.SwingUtilities
 import javax.swing.Timer
-import kotlin.coroutines.CoroutineContext
 
 /**
  * Dispatches execution onto Swing event dispatching thread and provides native [delay] support.
@@ -25,9 +24,4 @@ object Swing : CoroutineDispatcher(), Delay {
         }
         continuation.onCompletion { timer.stop() }
     }
-}
-
-public class SwingContextProvider : DefaultCoroutineContextProvider {
-    override fun getDefaultCoroutineContext(currentThread: Thread): CoroutineContext? =
-            if (SwingUtilities.isEventDispatchThread()) Swing else null
 }

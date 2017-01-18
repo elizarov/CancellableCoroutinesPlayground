@@ -8,10 +8,9 @@ import javafx.event.ActionEvent
 import javafx.event.EventHandler
 import javafx.util.Duration
 import kotlinx.coroutines.experimental.*
-import kotlinx.coroutines.experimental.spi.DefaultCoroutineContextProvider
+import kotlinx.coroutines.experimental.javafx.JavaFx.delay
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.CoroutineContext
 
 
 /**
@@ -27,7 +26,7 @@ object JavaFx : CoroutineDispatcher(), Delay {
 
     /**
      * Suspends coroutine until next JavaFx pulse and returns time of the pulse on resumption.
-     * If the [Lifetime] of the current coroutine is completed while this suspending function is waiting, this function
+     * If the [Job] of the current coroutine is completed while this suspending function is waiting, this function
      * immediately resumes with [CancellationException] .
      */
     suspend fun awaitPulse(): Long = suspendCancellableCoroutine { cont ->
@@ -55,9 +54,4 @@ private class PulseTimer : AnimationTimer() {
     fun onNext(cont: CancellableContinuation<Long>) {
         next += cont
     }
-}
-
-public class JavaFxContextProvider : DefaultCoroutineContextProvider {
-    override fun getDefaultCoroutineContext(currentThread: Thread): CoroutineContext? =
-        if (Platform.isFxApplicationThread()) JavaFx else null
 }

@@ -1,6 +1,8 @@
-import kotlinx.coroutines.experimental.*
+import kotlinx.coroutines.experimental.CancellationException
+import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.future.await
 import kotlinx.coroutines.experimental.future.future
+import kotlinx.coroutines.experimental.withTimeout
 
 fun main(args: Array<String>) {
     fun slow(s: String) = future {
@@ -30,5 +32,5 @@ fun main(args: Array<String>) {
         log("e = $e")
         "done"
     }
-    println("f.get() = ${f.get()}")
+    log("f.get() = ${f.get()}")
 }

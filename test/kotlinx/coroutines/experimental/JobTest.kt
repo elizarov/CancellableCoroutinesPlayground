@@ -3,10 +3,10 @@ package kotlinx.coroutines.experimental
 import org.junit.Assert.*
 import org.junit.Test
 
-class LifetimeTest {
+class JobTest {
     @Test
     fun testState() {
-        val lifetime = LifetimeSupport()
+        val lifetime = JobSupport()
         assertTrue(lifetime.isActive)
         lifetime.cancel()
         assertFalse(lifetime.isActive)
@@ -14,7 +14,7 @@ class LifetimeTest {
 
     @Test
     fun testHandler() {
-        val lifetime = LifetimeSupport()
+        val lifetime = JobSupport()
         var fireCount = 0
         lifetime.onCompletion { fireCount++ }
         assertTrue(lifetime.isActive)
@@ -31,7 +31,7 @@ class LifetimeTest {
 
     @Test
     fun testManyHandlers() {
-        val lifetime = LifetimeSupport()
+        val lifetime = JobSupport()
         val n = 100
         val fireCount = IntArray(n)
         for (i in 0 until n) lifetime.onCompletion { fireCount[i]++ }
@@ -49,11 +49,11 @@ class LifetimeTest {
 
     @Test
     fun testUnregisterInHandler() {
-        val lifetime = LifetimeSupport()
+        val lifetime = JobSupport()
         val n = 100
         val fireCount = IntArray(n)
         for (i in 0 until n) {
-            var registration: Lifetime.Registration? = null
+            var registration: Job.Registration? = null
             registration = lifetime.onCompletion {
                 fireCount[i]++
                 registration!!.unregister()
@@ -73,10 +73,10 @@ class LifetimeTest {
 
     @Test
     fun testManyHandlersWithUnregister() {
-        val lifetime = LifetimeSupport()
+        val lifetime = JobSupport()
         val n = 100
         val fireCount = IntArray(n)
-        val registrations = Array<Lifetime.Registration>(n) { i -> lifetime.onCompletion { fireCount[i]++ } }
+        val registrations = Array<Job.Registration>(n) { i -> lifetime.onCompletion { fireCount[i]++ } }
         assertTrue(lifetime.isActive)
         fun unreg(i: Int) = i % 4 <= 1
         for (i in 0 until n) if (unreg(i)) registrations[i].unregister()
@@ -88,7 +88,7 @@ class LifetimeTest {
 
     @Test
     fun testExceptionsInHandler() {
-        val lifetime = LifetimeSupport()
+        val lifetime = JobSupport()
         val n = 100
         val fireCount = IntArray(n)
         class TestException : Throwable()
@@ -106,7 +106,7 @@ class LifetimeTest {
 
     @Test
     fun testMemoryRelease() {
-        val lifetime = LifetimeSupport()
+        val lifetime = JobSupport()
         val n = 10_000_000
         var fireCount = 0
         for (i in 0 until n) lifetime.onCompletion { fireCount++ }.unregister()

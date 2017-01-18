@@ -3,12 +3,12 @@ package kotlinx.coroutines.experimental
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.CoroutineContext
 
-// internal helper class for various primitives that combines Lifetime and Continuation implementations
+// internal helper class for various primitives that combines Job and Continuation implementations
 @Suppress("LeakingThis")
-internal open class LifetimeContinuation<in T>(
+internal open class JobContinuation<in T>(
     parentContext: CoroutineContext
-) : LifetimeSupport(parentContext[Lifetime]), Continuation<T> {
-    override val context: CoroutineContext = parentContext + this // mixes this lifetime into this context
+) : JobSupport(parentContext[Job]), Continuation<T> {
+    override val context: CoroutineContext = parentContext + this // mixes this job into this context
 
     override fun resume(value: T) {
         while (true) { // lock-free loop on state

@@ -8,8 +8,9 @@ import kotlin.coroutines.ContinuationInterceptor
  */
 public interface Delay {
     /**
-     * Delays coroutine for a given time without blocking a thread. This suspending function is cancellable.
-     * If the [Lifetime] of the current coroutine is completed while this suspending function is waiting, this function
+     * Delays coroutine for a given time without blocking a thread and resumes it after a specified time.
+     * This suspending function is cancellable.
+     * If the [Job] of the current coroutine is completed while this suspending function is suspended, this function
      * immediately resumes with [CancellationException].
      */
     suspend fun delay(time: Long, unit: TimeUnit = TimeUnit.MILLISECONDS) {
@@ -25,12 +26,13 @@ public interface Delay {
 }
 
 /**
- * Delays coroutine for a given time without blocking a thread. This suspending function is cancellable.
- * If the [Lifetime] of the current coroutine is completed while this suspending function is waiting, this function
+ * Delays coroutine for a given time without blocking a thread and resumes it after a specified time.
+ * This suspending function is cancellable.
+ * If the [Job] of the current coroutine is completed while this suspending function is suspended, this function
  * immediately resumes with [CancellationException].
  *
  * This function delegates to [Delay] implementation of the context [CoroutineDispatcher] if possible,
- * or suspends with a single threaded scheduled executor service otherwise.
+ * otherwise it resumes using a built-in single-threaded scheduled executor service.
  */
 suspend fun delay(time: Long, unit: TimeUnit = TimeUnit.MILLISECONDS) {
     require(time >= 0) { "Delay time $time cannot be negative" }
@@ -41,6 +43,6 @@ suspend fun delay(time: Long, unit: TimeUnit = TimeUnit.MILLISECONDS) {
             return@sc
         }
         val timeout = scheduledExecutor.schedule({ cont.resume(Unit) }, time, unit)
-        cont.onCompletion(CancelFutureOnCompletion(cont, timeout))
+        cont.cancelFutureOnCompletion(timeout)
     }
 }

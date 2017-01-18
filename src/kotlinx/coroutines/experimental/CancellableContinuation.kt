@@ -1,7 +1,6 @@
 package kotlinx.coroutines.experimental
 
 import kotlin.coroutines.Continuation
-import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.intrinsics.SUSPENDED_MARKER
 import kotlin.coroutines.intrinsics.suspendCoroutineOrReturn
 import kotlin.coroutines.suspendCoroutine
@@ -9,12 +8,12 @@ import kotlin.coroutines.suspendCoroutine
 // --------------- cancellable continuations ---------------
 
 /**
- * Cancellable continuation. Its life-time is completed when it is resumed or cancelled.
+ * Cancellable continuation. Its job is completed when it is resumed or cancelled.
  * When [cancel] function is explicitly invoked, this continuation resumes with [CancellationException].
- * If the cancel reason was not a cancellation exception, the original exception is added as cause of the
+ * If the cancel reason was not a [CancellationException], then the original exception is added as cause of the
  * [CancellationException] that this continuation resumes with.
  */
-public interface CancellableContinuation<in T> : Continuation<T>, Lifetime
+public interface CancellableContinuation<in T> : Continuation<T>, Job
 
 /**
  * Suspend coroutine similar to [suspendCoroutine], but provide an implementation of [CancellableContinuation] to
@@ -32,7 +31,7 @@ public inline suspend fun <T> suspendCancellableCoroutine(crossinline block: (Ca
 @PublishedApi
 internal class SafeCancellableContinuation<in T>(
     private val delegate: Continuation<T>
-) : LifetimeContinuation<T>(delegate.context), CancellableContinuation<T> {
+) : JobContinuation<T>(delegate.context), CancellableContinuation<T> {
     // only updated from the thread that invoked suspendCancellableCoroutine
     private var suspendedThread: Thread? = Thread.currentThread()
 
